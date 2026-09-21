@@ -1,6 +1,8 @@
 # PAAD 분석 코드
 
-PAAD 환자의 targeted exome sequencing 자료와 임상정보를 이용한 PDAC 분석 코드를 정리한 저장소입니다. 기준 통합 스크립트 `PDAC_plot_n527_modified_v19_publication_update.R`의 분석 의미와 출력 형식을 유지하면서, 공통 처리와 분석별 실행 파일을 분리했습니다.
+PAAD 환자의 targeted exome sequencing 자료와 임상정보를 이용한 PDAC 분석 코드를 정리한 저장소입니다. 기준 통합 스크립트 `PDAC_plot_n527_modified_v19_publication_update.R`의 분석 의미와 출력 형식을 유지하면서, 공동연구자가 분석 내용을 파일명과 코드만 보고 따라갈 수 있도록 분석별로 나누었습니다.
+
+`scripts/`의 각 파일은 단순한 실행용 wrapper가 아닙니다. 해당 분석의 함수, 통계 규칙, 표·그림 생성 코드와 실제 실행 순서가 한 파일 안에 함께 있습니다. 따라서 분석을 이해하기 위해 별도의 초기화 파일이나 실행 중계 파일을 찾아갈 필요가 없습니다.
 
 이 저장소는 공개 가능한 코드·문서·합성 예제만 Git으로 관리합니다. 실제 환자자료와 새 분석 결과는 로컬에만 보관합니다.
 
@@ -18,8 +20,8 @@ PAAD 환자의 targeted exome sequencing 자료와 임상정보를 이용한 PDA
 
 ```text
 PAAD/
-├── R/                         # 입력 처리, plot, driver/survival, workflow 함수
-├── scripts/                   # 분석별 실행 진입점 7개
+├── R/                         # 설정·입력 전처리·공통 그림 보조 기능만 포함
+├── scripts/                   # 실제 분석 코드와 실행부가 함께 있는 파일 7개
 ├── config/
 │   ├── config.example.R       # 실제 로컬 입력용 공개 설정 예시
 │   ├── config.synthetic.R     # 합성 예제 smoke test 설정
@@ -35,7 +37,7 @@ PAAD/
 ├── outputs/                   # 새 실행 결과; Git 제외
 ├── local_notes/               # 비공개 조사·검증 기록; Git 제외
 ├── tests/run_tests.R          # 합성 자료 기반 통합 점검
-├── run_all.R                  # 전체 분석 진입점
+├── run_all.R                  # 아래 7개 분석 파일을 순서대로 실행
 └── PAAD.Rproj
 ```
 
@@ -76,8 +78,8 @@ Rscript --vanilla tests/run_tests.R
 - `.gitignore` 및 출력 경로 안전장치 확인
 - 합성 XLSX, CP949·CRLF TXT와 MAF 형식 확인
 - PDAC cohort 구성과 driver 요약 확인
-- 합성 입력을 이용한 전체 workflow 실행
-- `outputs/synthetic_run/`에 예상 산출물 42개가 생성되는지 확인
+- 합성 입력을 이용한 7개 분석의 개별 실행과 전체 실행
+- 실행별로 격리된 `outputs/test_runtime_<process-id>/`에 예상 산출물 42개가 생성되는지 확인한 뒤 성공 시 테스트 산출물 정리
 
 전체 합성 분석만 별도로 실행하려면 다음 명령을 사용합니다.
 
@@ -106,7 +108,7 @@ data/raw/result_527명.txt
 data/raw/PDAC_oncopanel.maf
 ```
 
-`분석용데이터1_수작업_eOJH_sdk0116.xlsx`도 현재 로컬 `data/raw/`에 복제되어 있지만, 기준 v19 workflow에서는 사용하지 않습니다.
+`분석용데이터1_수작업_eOJH_sdk0116.xlsx`도 현재 로컬 `data/raw/`에 복제되어 있지만, 기준 v19 분석에서는 사용하지 않습니다.
 
 공개 설정을 로컬 설정으로 복사한 뒤 필요한 경로만 수정합니다.
 
@@ -124,24 +126,28 @@ Rscript --vanilla run_all.R --config=config/local.R
 
 모든 결과는 기본적으로 `outputs/local_run/`에 새로 생성됩니다. 설정 검증은 `output_dir`이 이 저장소의 `outputs/` 또는 그 하위인지 확인하며, 원본 프로젝트나 임의의 외부 경로에는 결과를 쓰지 않습니다.
 
+재분석 결과를 이전 실행과 명확히 구분하려면 `config/local.R`의 `output_dir`을 실행별 새 하위 폴더로 지정하십시오. 같은 폴더를 다시 사용하면 같은 이름의 파일은 갱신되지만, 입력 조건 부족으로 이번 실행에서 생략된 분석의 과거 파일은 자동 삭제하지 않습니다.
+
 ## 분석별 실행
 
-각 실행 파일은 새로운 R session에서 독립적으로 입력과 설정을 준비합니다.
+각 실행 파일은 새로운 R session에서 독립적으로 입력과 설정을 준비합니다. 파일을 열면 상단의 목적·입력·출력 설명에 이어 분석 함수와 명시적인 실행부를 같은 곳에서 볼 수 있습니다. 전체 파일별 안내는 [scripts/README.md](scripts/README.md)를 참조하십시오.
+
+스크립트 파일명에서는 `01_`, `02_` 같은 순번을 없앴습니다. 결과 파일의 앞 번호는 기존 figure·표와의 대응을 유지하기 위해 그대로 두었습니다.
 
 | 분석 | 실행 파일 | 주요 출력 |
 | --- | --- | --- |
-| Main 및 T/N-filtered oncoplot | `scripts/01_oncoplots.R` | `1_*.png` |
-| 임상 요약표 | `scripts/02_clinical_summary.R` | `2_Clinical_Table_PDAC.xlsx` |
-| 임상 그룹별 변이빈도·변이개수 비교 | `scripts/03_comparison_plots.R` | `4_FreqPlot_*.png`, `4_TMB_BoxPlot_*.png` |
-| Top 20/5 mutation 및 변이개수 heatmap | `scripts/04_heatmaps.R` | `5_*.png`, `6_*.png`, `7_*.png` |
-| Somatic interaction | `scripts/05_somatic_interactions.R` | `9_*.png`, `9_*.xlsx` |
-| Stage count | `scripts/06_stage_counts.R` | `10_Stage_Counts_PDAC.png` |
-| KRAS·driver·clinicopathology·survival | `scripts/07_driver_kras_survival.R` | `11_*`–`17_*` |
+| Main 및 T/N-filtered oncoplot | `scripts/oncoplots.R` | `1_*.png` |
+| 임상 요약표 | `scripts/clinical_summary.R` | `2_Clinical_Table_PDAC.xlsx` |
+| 임상 그룹별 변이빈도·변이개수 비교 | `scripts/clinical_group_comparisons.R` | `4_FreqPlot_*.png`, `4_TMB_BoxPlot_*.png` |
+| Top 20/5 mutation 및 변이개수 heatmap | `scripts/mutation_heatmaps.R` | `5_*.png`, `6_*.png`, `7_*.png` |
+| Somatic interaction | `scripts/somatic_interactions.R` | `9_*.png`, `9_*.xlsx` |
+| Stage count | `scripts/stage_distribution.R` | `10_Stage_Counts_PDAC.png` |
+| KRAS·driver·clinicopathology·survival | `scripts/driver_kras_survival.R` | `11_*`–`17_*` |
 
 예를 들어 실제 로컬 데이터로 임상 요약표만 생성하려면 다음과 같이 실행합니다.
 
 ```sh
-Rscript --vanilla scripts/02_clinical_summary.R --config=config/local.R
+Rscript --vanilla scripts/clinical_summary.R --config=config/local.R
 ```
 
 원본 구간, 정확한 출력 파일과 현재 검증 상태는 [docs/analysis_map.md](docs/analysis_map.md)에 정리되어 있습니다.
@@ -157,7 +163,7 @@ Rscript --vanilla scripts/02_clinical_summary.R --config=config/local.R
 | `target_encoding` | cohort TXT 인코딩; 현재 `CP949` |
 | `sex_column_policy` | `legacy`, `target_patients`, `clinical_korean` 중 선택 |
 | `random_seed` | `NULL`이면 v19의 비결정적 simulated Fisher 동작 유지; 정수이면 재현 가능 |
-| `top_n` | 기본 상위 유전자 수 20 |
+| `top_n` | 기본 상위 유전자 수 20; 낮은 값은 빠른 코드 검증용이며 기존 figure 제목·파일명은 유지 |
 | `plot_dpi` | production 기본값 1000; smoke test는 150 |
 
 기본 실제 데이터 설정은 `sex_column_policy="legacy"`입니다. 원본 clinical workbook에는 `Sex`가 아니라 `성별코드`, cohort TXT에는 `sex`가 있으므로 v19과 동일하게 성별 annotation을 자동 대체하지 않습니다. 어느 source와 coding을 사용할지 확인한 뒤에만 정책을 변경해야 합니다.
@@ -165,9 +171,9 @@ Rscript --vanilla scripts/02_clinical_summary.R --config=config/local.R
 ## 검증 결과
 
 - 기준 v19 스크립트 전체 1,279행의 입력·분석·출력을 조사했습니다.
-- 합성 입력의 전체 workflow가 새 R session에서 완료되어 42개 파일을 생성했습니다.
+- 합성 입력으로 7개 분석 파일의 개별 실행과 `run_all.R` 전체 실행이 각각 완료되어 예상 산출물 42개를 확인했습니다.
 - 실제 로컬 입력은 v19 filter 후 임상 509행, retained MAF 4,224행으로 로드됐습니다.
-- 실제 자료로 각 workflow를 격리된 `outputs/code_validation/`에서 실행했습니다. 무거운 figure workflow는 top 5 검증 설정을 사용했습니다.
+- 실제 자료로 각 분석을 격리된 `outputs/code_validation/`에서 실행했습니다. 계산량이 큰 그림 분석은 top 5 검증 설정을 사용했습니다.
 - 기존 결과와 임상 요약 workbook 12개 sheet, 509×35 driver/KRAS 표, 509×35 survival input 표, risk TSV 3개가 일치했습니다.
 - Driver-clinicopathology 표는 구조와 p-value 이외 필드가 일치했습니다.
 - simulated Fisher p-value의 기존 RNG 상태와 PNG의 pixel/figure 동등성은 확인하지 않았습니다.

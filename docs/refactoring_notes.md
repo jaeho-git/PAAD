@@ -2,7 +2,7 @@
 
 ## 범위
 
-기준은 `PDAC_plot_n527_modified_v19_publication_update.R`이다. 통합 스크립트의 cohort 정의와 분석 로직을 공통 모듈과 일곱 개 실행 파일로 분리했으며, 원본 프로젝트는 조사 중 읽기 전용으로 유지했다.
+기준은 `PDAC_plot_n527_modified_v19_publication_update.R`이다. 통합 스크립트의 cohort 정의를 공통 입력 코드로 정리하고, 실제 분석 로직은 내용을 나타내는 이름의 일곱 실행 파일에 배치했다. 원본 프로젝트는 조사 중 읽기 전용으로 유지했다.
 
 사용자 요청에 따라 다음 저장 정책을 적용했다.
 
@@ -20,10 +20,11 @@
 | 변경 | 구현 | 결과 의미에 대한 처리 |
 | --- | --- | --- |
 | 개인 절대경로 제거 | `config/config.example.R` 및 Git 제외 대상 `config/local.R` | 입력 선택은 설정으로 이동; 로직은 유지 |
-| 안전한 출력 경로 | `output_dir`을 저장소 `outputs/` 또는 하위 경로로 제한 | 기존 결과를 덮어쓰지 않음 |
-| 공통 module 분리 | `R/config.R`, `R/data.R`, plot/driver/workflow module | 개별/전체 실행이 같은 함수 사용 |
-| 분석별 entrypoint | `scripts/01_*.R`부터 `07_*.R`, `run_all.R` | v19 실행부의 순서와 출력명을 보존 |
-| 이전 session 의존 제거 | 각 entrypoint가 bootstrap, 설정, 입력을 명시적으로 로드 | 새 R session에서 실행 가능 |
+| 안전한 출력 경로 | `output_dir`을 저장소 `outputs/` 또는 하위 경로로 제한 | 원본 프로젝트의 기존 결과 폴더에는 쓰지 않음; 같은 `output_dir` 재사용 시 동명 생성물은 갱신 |
+| 공통 기반 코드 제한 | `R/config.R`, `R/data.R`, `R/plot_helpers.R` | 설정·입력·반복되는 그림 보조만 공유하고 분석 정의는 감추지 않음 |
+| 직관적인 분석 파일 | `scripts/oncoplots.R` 등 내용을 나타내는 일곱 이름 | 파일 하나에서 해당 통계·표·그림 코드와 실행 호출을 함께 확인 |
+| 간접 실행 계층 제거 | 별도 초기화·실행 중계 파일 없이 각 파일이 설정과 입력을 명시적으로 준비 | 새 R session에서 독립 실행 가능하며 코드 탐색 단계 감소 |
+| 명시적인 전체 실행 | `run_all.R`이 일곱 분석 파일을 고정 순서로 실행 | 개별 실행과 같은 코드를 사용하고 v19 출력 순서·이름을 보존 |
 | package 명시적 사전 점검 | 필요한 package를 점검하고 누락 시 종료 | 실행 중 사용자의 global library를 변경하지 않음 |
 | 실제/합성 자료 분리 | `data/raw/`는 Git 제외, `data/example/`은 합성 fixture | 합성 실행을 실제 연구 검증으로 간주하지 않음 |
 | Sex source ambiguity 표면화 | `sex_column_policy`에 `legacy`, `target_patients`, `clinical_korean` 제공 | 기본값은 v19처럼 자동 대체하지 않음; 대체는 사용자 명시 필요 |
@@ -64,12 +65,12 @@
 | 기준 코드 분석 목록과 입출력 추적 | 완료 | v19 전체 1,279행의 section, input reader, output call을 정적으로 확인 |
 | 공개 경로의 개인 절대경로 검사 | 완료 | 공개 후보 code/config/docs/tests를 대상으로 검사; 실제 값은 기록하지 않음 |
 | 합성 fixture 자체 검사 | 완료 | Python 3.9에서 `generate_examples.py --check`로 schema·encoding·hash 확인 |
-| R module parse/source | 완료 | 새 R session에서 모든 module과 entrypoint 문법·참조 점검 |
+| R 공통 파일·분석 파일 parse | 완료 | 새 R session에서 공통 기반 파일, 일곱 standalone 분석 파일과 전체 실행 파일 문법 점검 |
 | 합성 입력 load/preprocess | 완료 | CP949 TXT, XLSX, MAF join 및 PDAC filter 확인 |
-| 합성 예제 개별 실행 | 완료 | 임상 요약, Stage count, 핵심 driver 집계와 CLI 진입점을 확인 |
-| 합성 예제 전체 실행 | 완료 | 24개 합성 입력행 중 v19 filter 후 20개 PDAC 행과 304개 MAF 행 중 300개 retained 행으로 전체 workflow를 실행해 42개 파일 생성; 과학적 결과 검증이 아님 |
+| 합성 예제 개별 실행 | 완료 | 일곱 standalone CLI를 각각 새 R process에서 실행하고 대표 출력 생성 확인 |
+| 합성 예제 전체 실행 | 완료 | 24개 합성 입력행 중 v19 filter 후 20개 PDAC 행과 304개 MAF 행 중 300개 retained 행으로 전체 분석을 실행해 42개 파일 생성; 과학적 결과 검증이 아님 |
 | 실제 `data/raw/` load | 완료 | v19 filter 후 임상 509행과 retained MAF 4,224행 확인 |
-| 실제 자료 workflow 실행 | 부분 완료 | 각 workflow를 격리된 `outputs/code_validation/`에 실행; oncoplot/comparison/heatmap은 top 5 검증 설정, production top 20·1000 dpi `run_all.R`은 미실행 |
+| 실제 자료 분석 실행 | 부분 완료 | 각 분석을 격리된 `outputs/code_validation/`에 실행; oncoplot/comparison/heatmap은 top 5 검증 설정, production top 20·1000 dpi `run_all.R`은 미실행 |
 | 원본 대비 표 수치 동등성 | 부분 확인 | 임상 요약 12개 sheet, 509×35 driver/KRAS·survival input 표, risk TSV 3개 값 동일; driver clinicopathology 표는 p-value 이외 필드 동일 |
 | 원본 대비 p-value·figure 동등성 | 미확인 | simulated Fisher의 기존 RNG 조건을 재현하지 못했고 PNG pixel/figure 비교는 수행하지 않음 |
 

@@ -1,3 +1,11 @@
+# Shared input preparation only.
+#
+# This file does not define any figure, statistical comparison, driver rule, or
+# survival analysis. It performs the steps every analysis needs in exactly the
+# same way: package checks, reading the three inputs, v19-compatible cohort
+# filtering/column normalization, and MAF construction. Analysis-specific
+# variables and rules are kept in the descriptively named files under scripts/.
+
 assert_packages <- function(packages) {
   missing <- packages[!vapply(packages, requireNamespace, logical(1), quietly = TRUE)]
   if (length(missing)) {
@@ -28,6 +36,8 @@ rename_if_present <- function(data, old, new) {
 }
 
 prepare_clinical_data <- function(clinical_data, target_patients, sex_column_policy = "legacy") {
+  # Reproduce the v19 cohort construction in one place so every standalone
+  # analysis receives the same patients, column names, and derived categories.
   clinical_data <- rename_if_present(clinical_data, "CA 19-9", "CA19_9")
   clinical_data <- rename_if_present(clinical_data, "N status", "N_status")
 
@@ -135,8 +145,9 @@ prepare_clinical_data <- function(clinical_data, target_patients, sex_column_pol
 }
 
 load_analysis_data <- function(config) {
+  # Read and connect the clinical workbook, target-patient table, and MAF.
+  # The returned list is the complete common input used by scripts/*.R.
   load_analysis_packages()
-  apply_analysis_seed(config)
   clinical_raw <- readxl::read_excel(config$clinical_file, sheet = config$clinical_sheet)
   target_patients <- readr::read_tsv(
     config$target_patients_file,
@@ -156,11 +167,4 @@ load_analysis_data <- function(config) {
   maf_raw <- maftools::read.maf(maf = config$maf_file, clinicalData = clinical, verbose = FALSE)
   maf <- maftools::subsetMaf(maf = maf_raw, tsb = clinical$Tumor_Sample_Barcode)
   list(clinical = clinical, maf = maf, config = config)
-}
-
-annotation_variables <- function(data) {
-  intersect(
-    c("Sex", "Age_group", "Differentiation", "NAC", "T", "N", "N_status", "BMI", "CA19_9", "CEA", "Stage", "Stage_Group", "Size"),
-    names(data$maf@clinical.data)
-  )
 }

@@ -1,4 +1,9 @@
-load_config <- function(path, project_root = paad_project_root()) {
+# Shared configuration helpers.
+#
+# Analysis code lives in scripts/*.R. This file only reads config files,
+# validates input/output paths, and keeps generated files inside outputs/.
+
+load_config <- function(path, project_root = getwd()) {
   if (!file.exists(path)) {
     stop(
       "Configuration file not found: ", path,
@@ -14,6 +19,24 @@ load_config <- function(path, project_root = paad_project_root()) {
   }
   config <- get("paad_config", envir = config_env, inherits = FALSE)
   validate_config(config, project_root)
+}
+
+load_config_from_command_line <- function(project_root = getwd(), args = commandArgs(trailingOnly = TRUE)) {
+  config_arguments <- grep("^--config=", args, value = TRUE)
+  if (length(config_arguments) > 1L) {
+    stop("Specify --config only once.", call. = FALSE)
+  }
+
+  config_file <- if (length(config_arguments)) {
+    sub("^--config=", "", config_arguments[[1]])
+  } else {
+    "config/local.R"
+  }
+  if (!grepl("^(/|[A-Za-z]:[/\\\\])", config_file)) {
+    config_file <- file.path(project_root, config_file)
+  }
+
+  load_config(config_file, project_root)
 }
 
 normalize_config_path <- function(path, project_root, must_work = FALSE) {
@@ -84,19 +107,4 @@ output_path <- function(config, filename) {
   path <- file.path(config$output_dir, filename)
   if (!path_is_within(path, config$output_dir)) stop("Unsafe output path.", call. = FALSE)
   path
-}
-
-apply_analysis_seed <- function(config) {
-  if (is.null(config$random_seed)) {
-    message("Compatibility note: random_seed is NULL, matching v19's unseeded simulated tests. ",
-            "Set random_seed in config/local.R for reproducible simulated p-values.")
-  } else {
-    set.seed(config$random_seed)
-  }
-  invisible(config$random_seed)
-}
-
-reset_workflow_seed <- function(config) {
-  if (!is.null(config$random_seed)) set.seed(config$random_seed)
-  invisible(config$random_seed)
 }
