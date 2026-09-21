@@ -1,0 +1,19 @@
+* text=auto
+
+*.R text eol=lf
+*.Rmd text eol=lf
+*.md text eol=lf
+*.maf text eol=lf
+*.tsv text eol=lf
+*.csv text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+
+# The text/MAF examples preserve their source-format byte contracts,
+# including CP949 where applicable and CRLF line endings.
+/data/example/*.txt -text
+/data/example/*.maf -text -eol
+
+*.xlsx binary
+*.png binary
+*.pdf binary

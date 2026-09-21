@@ -1,0 +1,45 @@
+# Local configuration and credentials
+/config/local.R
+/.Renviron
+/.env
+/.env.*
+!.env.example
+
+# Local production data (synthetic examples under data/example are tracked)
+/data/raw/
+/data/processed/
+/data/private/
+
+# Legacy source-project data/result directories must never be copied here
+/00_Data/
+/01_Results/
+/01_Results_copy/
+
+# Newly generated analysis outputs and private validation notes
+/outputs/
+/local_notes/
+
+# R session and project-local state
+/.RData
+/.Rhistory
+/.Ruserdata
+/.Rproj.user/
+/Rplots.pdf
+
+# Test and tool caches
+/.cache/
+/.pytest_cache/
+/tests/testthat/_snaps/*.new
+
+# Editor and operating-system files
+.DS_Store
+Thumbs.db
+*~
+*.swp
+~$*
+
+# Local bundles/backups are not source files
+/*.zip
+/*.tar
+/*.tar.gz
+
