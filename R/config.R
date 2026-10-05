@@ -75,6 +75,23 @@ validate_config <- function(config, project_root) {
   defaults <- list(
     target_encoding = "CP949",
     clinical_sheet = 1,
+    clinical_schema = "legacy",
+    analysis_profile = NULL,
+    kras_source = NULL,
+    manuscript_subdir = "manuscript",
+    signature_analysis = FALSE,
+    signature_python = NULL,
+    signature_reference_volume = NULL,
+    signature_min_snv = 10L,
+    signature_bootstraps = 100L,
+    signature_positive_min_count = 5L,
+    signature_positive_min_proportion = 0.20,
+    signature_min_cosine = 0.90,
+    signature_min_stability = 0.80,
+    clinical_extensions = FALSE,
+    validation_bootstraps = 500L,
+    pretreatment_measurements = FALSE,
+    updated_cohort = "all_unique",
     compatibility_mode = "v19",
     sex_column_policy = "legacy",
     random_seed = NULL,
@@ -82,6 +99,31 @@ validate_config <- function(config, project_root) {
     plot_dpi = 1000L
   )
   for (field in names(defaults)) if (is.null(config[[field]])) config[[field]] <- defaults[[field]]
+  if (is.null(config$analysis_profile)) config$analysis_profile <- if (identical(config$clinical_schema, "curated_v3")) "manuscript" else "legacy"
+  if (!config$analysis_profile %in% c("legacy", "manuscript")) stop("analysis_profile must be legacy or manuscript.")
+  config$validation_bootstraps <- as.integer(config$validation_bootstraps)
+  if (is.na(config$validation_bootstraps) || config$validation_bootstraps < 20L) stop("validation_bootstraps must be at least 20.")
+  if (!is.null(config$kras_source) && !config$kras_source %in% c("clinical", "maf", "workbook_maf")) {
+    stop("kras_source must be clinical, maf, or workbook_maf.")
+  }
+  config$signature_analysis <- isTRUE(config$signature_analysis)
+  config$signature_min_snv <- as.integer(config$signature_min_snv)
+  config$signature_bootstraps <- as.integer(config$signature_bootstraps)
+  config$signature_positive_min_count <- as.integer(config$signature_positive_min_count)
+  for (nm in c("signature_min_snv", "signature_bootstraps", "signature_positive_min_count")) {
+    if (is.na(config[[nm]]) || config[[nm]] < 1L) stop(nm, " must be a positive integer.")
+  }
+  for (nm in c("signature_positive_min_proportion", "signature_min_cosine", "signature_min_stability")) {
+    config[[nm]] <- as.numeric(config[[nm]])
+    if (!is.finite(config[[nm]]) || config[[nm]] < 0 || config[[nm]] > 1) stop(nm, " must be between 0 and 1.")
+  }
+  if (length(config$manuscript_subdir) != 1L || grepl("[/\\\\]", config$manuscript_subdir) || config$manuscript_subdir %in% c("", ".", "..")) stop("manuscript_subdir must be a simple folder name.")
+  if (!config$clinical_schema %in% c("legacy", "curated_v3")) {
+    stop("clinical_schema must be legacy or curated_v3.", call. = FALSE)
+  }
+  if (!config$updated_cohort %in% c("localized_unique", "all_unique")) {
+    stop("updated_cohort must be localized_unique or all_unique.", call. = FALSE)
+  }
   if (!identical(config$compatibility_mode, "v19")) {
     stop("Only compatibility_mode = 'v19' is currently implemented.", call. = FALSE)
   }

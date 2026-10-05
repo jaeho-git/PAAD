@@ -25,6 +25,7 @@ source(file.path(PROJECT_ROOT, "R", "data.R"))
 source(file.path(PROJECT_ROOT, "R", "plot_helpers.R"))
 
 draw_oncoplot <- function(maf, top_n, title, filename, annotation_columns, dpi) {
+  source("R/oncoplot_counts.R")
   top_genes <- maftools::getGeneSummary(maf) |>
     dplyr::slice_head(n = top_n) |>
     dplyr::pull(Hugo_Symbol)
@@ -55,6 +56,16 @@ draw_oncoplot <- function(maf, top_n, title, filename, annotation_columns, dpi) 
     tibble::column_to_rownames("Hugo_Symbol") |>
     as.matrix()
 
+  if (identical(config$clinical_schema, "curated_v3")) {
+    # Keep denominator = the entire selected cohort, even without a top-gene call.
+    ids <- as.character(maf@clinical.data$Tumor_Sample_Barcode)
+    full_matrix <- matrix("", nrow = nrow(mutation_matrix), ncol = length(ids),
+      dimnames = list(rownames(mutation_matrix), ids))
+    full_matrix[, colnames(mutation_matrix)] <- mutation_matrix
+    full_matrix[is.na(full_matrix)] <- ""
+    mutation_matrix <- full_matrix
+  }
+
   clinical <- as.data.frame(maf@clinical.data) |>
     dplyr::filter(Tumor_Sample_Barcode %in% colnames(mutation_matrix)) |>
     tibble::column_to_rownames("Tumor_Sample_Barcode")
@@ -72,7 +83,9 @@ draw_oncoplot <- function(maf, top_n, title, filename, annotation_columns, dpi) 
     ")"
   )
 
-  top_annotation <- make_annotation(clinical, annotation_columns)
+  counts <- oncoplot_variant_counts(maf@data, colnames(mutation_matrix), rownames(mutation_matrix))
+  count_annotations <- oncoplot_count_annotations(counts)
+  top_annotation <- c(count_annotations$top, make_annotation(clinical, annotation_columns))
   mutation_colors <- c(
     Frameshift = "#FF7F50", Nonsense = "#DC143C", Missense = "#3CB371",
     Splice_Site = "#9370DB", In_Frame = "#FFD700", Multi_Hit = "#000000"
@@ -100,7 +113,10 @@ draw_oncoplot <- function(maf, top_n, title, filename, annotation_columns, dpi) 
     alter_fun = alter_functions,
     col = mutation_colors,
     top_annotation = top_annotation,
-    column_title = plot_title,
+    right_annotation = count_annotations$right,
+    left_annotation = count_annotations$left,
+    show_pct = FALSE,
+    column_title = paste0(plot_title, "\nTop: all retained variants per patient. Right: variants per gene. Left: patients n (%)."),
     column_title_gp = grid::gpar(fontsize = 10),
     pct_gp = grid::gpar(fontsize = 8),
     row_names_gp = grid::gpar(fontsize = 9),
@@ -120,6 +136,9 @@ run_oncoplots <- function(data, config) {
     names(data$maf@clinical.data)
   )
 
+  if (identical(config$clinical_schema, "curated_v3")) annotation_columns <- c(
+    "Sex", "Age_group", "Differentiation", "Neoadjuvant", "T_stage", "N_stage", "LN_positive",
+    "M_stage", "BMI", "CA19_9", "CEA", "AJCC_stage", "Stage_Group", "Tumor_size")
   message("[1/2] Main PDAC oncoplot")
   draw_oncoplot(
     maf = data$maf,

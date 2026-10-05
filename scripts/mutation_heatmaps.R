@@ -7,7 +7,7 @@
 #   Rscript --vanilla scripts/mutation_heatmaps.R --config=config/local.R
 # 합성 예제 실행:
 #   Rscript --vanilla scripts/mutation_heatmaps.R --config=config/config.synthetic.R
-# 주의: 이 프로젝트의 기존 "TMB" 값은 mutations/Mb가 아니라 샘플별 retained MAF 행 수입니다.
+# 주의: 이 프로젝트의 기존 "MAF_variant_count" 값은 mutations/Mb가 아니라 샘플별 retained MAF 행 수입니다.
 
 # 이 스크립트는 경로 해석을 단순하게 유지하기 위해 반드시 저장소 루트에서 실행합니다.
 PROJECT_ROOT <- normalizePath(getwd(), winslash = "/", mustWork = TRUE)
@@ -42,6 +42,13 @@ draw_mutation_heatmap <- function(maf, top_n, title, filename, annotation_column
     ) |>
     tibble::column_to_rownames("Hugo_Symbol") |>
     as.matrix()
+  if (identical(config$clinical_schema, "curated_v3")) {
+    ids <- as.character(maf@clinical.data$Tumor_Sample_Barcode)
+    full_matrix <- matrix(0L, nrow = nrow(mutation_matrix), ncol = length(ids),
+      dimnames = list(rownames(mutation_matrix), ids))
+    full_matrix[, colnames(mutation_matrix)] <- mutation_matrix
+    mutation_matrix <- full_matrix
+  }
   if (!nrow(mutation_matrix) || !ncol(mutation_matrix)) {
     stop("Clustered heatmap requires mutation data.", call. = FALSE)
   }
@@ -72,16 +79,16 @@ draw_mutation_heatmap <- function(maf, top_n, title, filename, annotation_column
 
 draw_retained_maf_count_heatmap <- function(maf, title, filename, annotation_columns, dpi) {
   mutation_counts <- maf@data |>
-    dplyr::count(Tumor_Sample_Barcode, name = "TMB")
+    dplyr::count(Tumor_Sample_Barcode, name = "MAF_variant_count")
   clinical <- as.data.frame(maf@clinical.data) |>
     dplyr::left_join(mutation_counts, by = "Tumor_Sample_Barcode") |>
-    dplyr::mutate(TMB = tidyr::replace_na(TMB, 0L)) |>
-    dplyr::arrange(dplyr::desc(TMB))
+    dplyr::mutate(MAF_variant_count = tidyr::replace_na(MAF_variant_count, 0L)) |>
+    dplyr::arrange(dplyr::desc(MAF_variant_count))
 
   count_matrix <- matrix(
-    clinical$TMB,
+    clinical$MAF_variant_count,
     nrow = 1L,
-    dimnames = list("TMB", clinical$Tumor_Sample_Barcode)
+    dimnames = list("Variant count", clinical$Tumor_Sample_Barcode)
   )
   annotation_data <- clinical |>
     tibble::column_to_rownames("Tumor_Sample_Barcode")
@@ -96,7 +103,7 @@ draw_retained_maf_count_heatmap <- function(maf, title, filename, annotation_col
   on.exit(close_device(), add = TRUE)
   heatmap <- ComplexHeatmap::Heatmap(
     count_matrix,
-    name = "TMB",
+    name = "Variant count",
     col = circlize::colorRamp2(color_limits, c("#F7FBFF", "#08306B")),
     top_annotation = top_annotation,
     column_title = paste0(title, " (N=", ncol(count_matrix), ")"),
@@ -121,6 +128,9 @@ run_mutation_heatmaps <- function(data, config) {
     names(data$maf@clinical.data)
   )
 
+  if (identical(config$clinical_schema, "curated_v3")) annotation_columns <- c(
+    "Sex", "Age_group", "Differentiation", "Neoadjuvant", "T_stage", "N_stage", "LN_positive",
+    "M_stage", "BMI", "CA19_9", "CEA", "AJCC_stage", "Stage_Group", "Tumor_size")
   message("[1/3] Top-", config$top_n, " mutation heatmap")
   draw_mutation_heatmap(
     maf = data$maf,
@@ -145,7 +155,7 @@ run_mutation_heatmaps <- function(data, config) {
   message("[3/3] Retained MAF row count heatmap")
   draw_retained_maf_count_heatmap(
     maf = data$maf,
-    title = "TMB Heatmap (PDAC)",
+    title = "Variant count (PDAC)",
     filename = output_path(config, "7_TMB_Heatmap_PDAC.png"),
     annotation_columns = annotation_columns,
     dpi = config$plot_dpi

@@ -2,6 +2,14 @@
 
 이 저장소는 실제 환자별 임상자료와 변이자료를 Git에 저장하지 않습니다. 로컬 실제 입력과 공개 가능한 합성 예제를 분리합니다.
 
+## 새 임상 XLSX (curated_v3)
+
+새 workbook은 `Main`(40개 변수)과 `Data_dictionary` 시트를 사용합니다. 실제 파일은 `data/raw/`에 그대로 두며 분석은 원본을 수정하지 않습니다. 새 변수의 이름·코딩·출처는 [업데이트 분석 안내](../docs/updated_analysis.md)에 정리했습니다.
+
+`Age`, `LVI`, `PNI`, `R_status`, 사망/재발 사건과 기간은 새 workbook에서 읽습니다. 이전 TXT의 값을 덮어씌우거나 이전 대상 목록으로 필터링하지 않습니다. 임상 `TMB`(mutations/Mb)와 `KRAS_subtype`은 원래 이름으로 보존합니다. MAF의 `MAF_variant_count`와 `KRAS_subtype_raw`는 별도로 생성합니다. 중복 patient ID의 모든 행만 주 분석에서 제외하고 **M1도 포함**합니다. 중복 행은 감사·원본 검체 기술통계에만 유지합니다. 매핑 XLSX의 빈 지시 칸은 새 컬럼명 채택을 뜻하며, 임상 데이터의 빈칸을 No로 바꾸는 뜻이 아닙니다.
+
+`data/example/curated_v3_main.example.tsv`와 `curated_v3_dictionary.example.tsv`는 새 workbook의 두 시트를 설명하는 완전 합성 TSV입니다. 실제 환자에서 추출하지 않았습니다. 이 예시는 구조 설명용이며 그 자체를 XLSX 대신 `clinical_file`에 지정할 수는 없습니다. 변환·검증 로직은 `Rscript --vanilla tests/test_curated_input.R`로 점검합니다.
+
 ## 디렉터리 구분
 
 | 경로 | 용도 | Git 관리 |

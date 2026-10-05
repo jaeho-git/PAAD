@@ -50,9 +50,14 @@ if (!all(file.exists(file.path(PROJECT_ROOT, required_project_files)))) {
 # validation, common input preparation, and small plotting/statistical helpers.
 source(file.path(PROJECT_ROOT, "R", "config.R"))
 source(file.path(PROJECT_ROOT, "R", "data.R"))
+source(file.path(PROJECT_ROOT, "R", "pairwise_tests.R"))
+source(file.path(PROJECT_ROOT, "R", "genomics.R"))
 source(file.path(PROJECT_ROOT, "R", "plot_helpers.R"))
 
 config <- load_config_from_command_line(PROJECT_ROOT)
+curated_mode <- identical(config$clinical_schema, "curated_v3")
+kras_absent_label <- if (curated_mode) "No KRAS call" else "WT"
+negative_status <- if (curated_mode) "No retained call" else "Wild type"
 analysis_data <- load_analysis_data(config)
 clinical <- analysis_data$clinical
 maf <- analysis_data$maf
@@ -77,6 +82,7 @@ if (is.null(config$random_seed)) {
 driver_genes <- c("KRAS", "TP53", "SMAD4", "CDKN2A")
 
 extract_kras_subtype <- function(maf_data) {
+  if (curated_mode) return(derive_kras_maf(as.data.frame(maf_data))[, c("Tumor_Sample_Barcode", "KRAS_MAF_group", "KRAS_subtype_raw")])
   amino_acid_columns <- intersect(
     c("HGVSp_Short", "Protein_Change", "Amino_Acid_Change", "AAChange", "HGVSp"),
     names(maf_data)
@@ -87,7 +93,7 @@ extract_kras_subtype <- function(maf_data) {
   if (!nrow(kras)) {
     return(tibble::tibble(
       Tumor_Sample_Barcode = character(),
-      KRAS_subtype = character(),
+      KRAS_MAF_group = character(),
       KRAS_subtype_raw = character()
     ))
   }
@@ -105,7 +111,7 @@ extract_kras_subtype <- function(maf_data) {
 
   kras |>
     dplyr::mutate(
-      KRAS_subtype = dplyr::case_when(
+      KRAS_MAF_group = dplyr::case_when(
         stringr::str_detect(amino_acid_string, "G12D|p\\.Gly12Asp") ~ "G12D",
         stringr::str_detect(amino_acid_string, "G12V|p\\.Gly12Val") ~ "G12V",
         stringr::str_detect(amino_acid_string, "G12R|p\\.Gly12Arg") ~ "G12R",
@@ -130,18 +136,18 @@ extract_kras_subtype <- function(maf_data) {
     ) |>
     dplyr::group_by(Tumor_Sample_Barcode) |>
     dplyr::summarise(
-      KRAS_subtype_raw = paste(sort(unique(KRAS_subtype)), collapse = ";"),
+      KRAS_subtype_raw = paste(sort(unique(KRAS_MAF_group)), collapse = ";"),
       .groups = "drop"
     ) |>
     dplyr::mutate(
-      KRAS_subtype = dplyr::case_when(
+      KRAS_MAF_group = dplyr::case_when(
         KRAS_subtype_raw == "G12D" ~ "G12D",
         KRAS_subtype_raw == "G12V" ~ "G12V",
         KRAS_subtype_raw == "G12R" ~ "G12R",
         TRUE ~ "Other KRAS"
       )
     ) |>
-    dplyr::select(Tumor_Sample_Barcode, KRAS_subtype, KRAS_subtype_raw)
+    dplyr::select(Tumor_Sample_Barcode, KRAS_MAF_group, KRAS_subtype_raw)
 }
 
 
@@ -177,16 +183,17 @@ make_driver_summary <- function(maf_data, clinical_data) {
       driver_mutation_status = ifelse(
         driver_mutation_count > 0,
         "Driver-mutated",
-        "Driver wild type"
+        if (curated_mode) "No driver call" else "Driver wild type"
       )
     ) |>
     dplyr::ungroup() |>
     dplyr::left_join(extract_kras_subtype(maf_data), by = "Tumor_Sample_Barcode") |>
     dplyr::mutate(
-      KRAS_subtype = ifelse(is.na(KRAS_subtype) | KRAS == 0, "WT", KRAS_subtype),
-      KRAS_subtype = factor(
-        KRAS_subtype,
-        levels = c("G12D", "G12V", "G12R", "Other KRAS", "WT")
+      KRAS_MAF_group = ifelse(is.na(KRAS_MAF_group) | KRAS == 0, kras_absent_label, KRAS_MAF_group),
+      KRAS_subtype_raw = ifelse(is.na(KRAS_subtype_raw) & KRAS == 0, kras_absent_label, KRAS_subtype_raw),
+      KRAS_MAF_group = factor(
+        KRAS_MAF_group,
+        levels = c("G12D", "G12V", "G12R", "Other KRAS", kras_absent_label)
       ),
       driver_count_group = dplyr::case_when(
         driver_mutation_count <= 1 ~ "0-1",
@@ -196,22 +203,22 @@ make_driver_summary <- function(maf_data, clinical_data) {
       driver_mutation_count_exact = factor(
         driver_mutation_count,
         levels = 0:4,
-        labels = paste0(0:4, " Mutations")
+        labels = paste0(0:4, " genes")
       ),
       driver_mutation_count_collapsed = factor(
         dplyr::case_when(
-          driver_mutation_count == 0 ~ "0 Mutations",
-          driver_mutation_count %in% 1:2 ~ "1-2 Mutations",
-          driver_mutation_count %in% 3:4 ~ "3-4 Mutations"
+          driver_mutation_count == 0 ~ "0 genes",
+          driver_mutation_count %in% 1:2 ~ "1-2 genes",
+          driver_mutation_count %in% 3:4 ~ "3-4 genes"
         ),
-        levels = c("0 Mutations", "1-2 Mutations", "3-4 Mutations")
+        levels = c("0 genes", "1-2 genes", "3-4 genes")
       )
     )
 }
 
 
 # -----------------------------------------------------------------------------
-# 4. Draw the KRAS-subtype and driver-count pie charts
+# 4. Draw the KRAS-subtype and altered-driver-gene count pie charts
 # -----------------------------------------------------------------------------
 
 make_pie_chart <- function(data, group_variable, title, filename,
@@ -420,11 +427,12 @@ make_driver_clinicopath_table <- function(driver_data, filename) {
     tibble::tibble(Variable = .y, Category = .x$levels, Row_type = "Category")
   ))
   result <- rows
+  clinic_pairs <- list()
 
   for (gene in driver_genes) {
     gene_rows <- rows
     mutant_column <- paste0(gene, " Mutant, n (%)")
-    wild_type_column <- paste0(gene, " Wild type, n (%)")
+    wild_type_column <- paste0(gene, " ", negative_status, ", n (%)")
     pvalue_column <- paste0(gene, " p-value")
     definition_column <- paste0(gene, " p-value definition")
     gene_rows[[mutant_column]] <- NA_character_
@@ -438,8 +446,8 @@ make_driver_clinicopath_table <- function(driver_data, filename) {
         dplyr::filter(!is.na(.data[[variable$column]])) |>
         dplyr::mutate(
           gene_status = factor(
-            ifelse(.data[[gene]] == 1, "Mutant", "Wild type"),
-            levels = c("Mutant", "Wild type")
+            ifelse(.data[[gene]] == 1, "Mutant", negative_status),
+            levels = c("Mutant", negative_status)
           ),
           clinic_category = factor(
             as.character(.data[[variable$column]]),
@@ -448,14 +456,18 @@ make_driver_clinicopath_table <- function(driver_data, filename) {
         ) |>
         dplyr::filter(!is.na(clinic_category))
 
+      if (curated_mode) {
+        pw <- pairwise_categorical(subset$gene_status, subset$clinic_category)
+        if (nrow(pw)) clinic_pairs[[paste(gene, label)]] <- cbind(data.frame(gene, characteristic = label), pw)
+      }
       denominator_mutant <- sum(subset$gene_status == "Mutant")
-      denominator_wild_type <- sum(subset$gene_status == "Wild type")
+      denominator_wild_type <- sum(subset$gene_status == negative_status)
       overall_row <- gene_rows$Variable == label & gene_rows$Row_type == "Overall"
       gene_rows[[pvalue_column]][overall_row] <- format_pvalue(
         test_categorical_association(table(subset$clinic_category, subset$gene_status))
       )
       gene_rows[[definition_column]][overall_row] <- paste0(
-        label, " overall distribution: ", gene, " mutant vs wild type"
+        label, " overall distribution: ", gene, " variant present vs ", negative_status
       )
       gene_rows[[mutant_column]][overall_row] <- ""
       gene_rows[[wild_type_column]][overall_row] <- ""
@@ -465,7 +477,7 @@ make_driver_clinicopath_table <- function(driver_data, filename) {
           gene_rows$Category == category &
           gene_rows$Row_type == "Category"
         n_mutant <- sum(subset$clinic_category == category & subset$gene_status == "Mutant")
-        n_wild_type <- sum(subset$clinic_category == category & subset$gene_status == "Wild type")
+        n_wild_type <- sum(subset$clinic_category == category & subset$gene_status == negative_status)
 
         gene_rows[[mutant_column]][category_row] <- if (denominator_mutant) {
           sprintf("%d (%.1f)", n_mutant, n_mutant / denominator_mutant * 100)
@@ -490,7 +502,7 @@ make_driver_clinicopath_table <- function(driver_data, filename) {
           test_categorical_association(table(binary_category, subset$gene_status))
         )
         gene_rows[[definition_column]][category_row] <- paste0(
-          category, " vs non-", category, ": ", gene, " mutant vs wild type"
+          category, " vs non-", category, ": ", gene, " variant present vs ", negative_status
         )
       }
     }
@@ -501,6 +513,8 @@ make_driver_clinicopath_table <- function(driver_data, filename) {
     )
   }
 
+  if (curated_mode) readr::write_tsv(dplyr::bind_rows(clinic_pairs),
+    file.path(dirname(filename), "13_Driver_pathology_pairwise_Fisher.tsv"))
   writexl::write_xlsx(result, filename)
 
   # A second workbook uses two header rows for easier presentation in Excel.
@@ -512,7 +526,7 @@ make_driver_clinicopath_table <- function(driver_data, filename) {
     )
   )
   for (gene in driver_genes) {
-    for (suffix in c(" Mutant, n (%)", " Wild type, n (%)", " p-value")) {
+    for (suffix in c(" Mutant, n (%)", paste0(" ", negative_status, ", n (%)"), " p-value")) {
       display[[paste0(gene, suffix)]] <- result[[paste0(gene, suffix)]]
     }
   }
@@ -522,7 +536,7 @@ make_driver_clinicopath_table <- function(driver_data, filename) {
   for (index in seq_along(driver_genes)) {
     start <- 2L + (index - 1L) * 3L
     first_header[[start]] <- driver_genes[[index]]
-    second_header[start:(start + 2L)] <- list("Mutant, n (%)", "Wild type, n (%)", "p-value")
+    second_header[start:(start + 2L)] <- list("Mutant, n (%)", paste0(negative_status, ", n (%)"), "p-value")
   }
   names(display) <- names(first_header)
   display_table <- dplyr::bind_rows(
@@ -583,13 +597,18 @@ run_survival_plot <- function(data, group_variable, time_variable, event_variabl
   )
   p_value <- 1 - stats::pchisq(log_rank$chisq, length(log_rank$n) - 1L)
 
-  fit_summary <- summary(fit)
+  pw <- pairwise_logrank(survival_data$surv_time, survival_data$surv_event, survival_data$group)
+  if (curated_mode) readr::write_tsv(pw, sub("\\.png$", "_pairwise_logrank.tsv", filename))
+  fit_summary <- summary(fit, censored = TRUE)
   group_levels <- levels(survival_data$group)
   curve_data <- tibble::tibble(
     time = fit_summary$time,
     survival = fit_summary$surv,
-    strata = stringr::str_replace(as.character(fit_summary$strata), "^group=", "")
+    strata = stringr::str_replace(as.character(fit_summary$strata), "^group=", ""),
+    n_censor = fit_summary$n.censor
   ) |>
+    dplyr::bind_rows(tibble::tibble(time = 0, survival = 1, strata = group_levels, n_censor = 0)) |>
+    dplyr::arrange(strata, time) |>
     dplyr::mutate(strata = factor(strata, levels = group_levels))
 
   time_breaks <- pretty(c(0, max(survival_data$surv_time)), n = 6)
@@ -613,12 +632,15 @@ run_survival_plot <- function(data, group_variable, time_variable, event_variabl
     ggplot2::aes(time, survival, color = strata)
   ) +
     ggplot2::geom_step(linewidth = 0.9) +
+    ggplot2::geom_point(data = dplyr::filter(curve_data, n_censor > 0), shape = 3, size = 1.4) +
+    ggplot2::scale_x_continuous(breaks = time_breaks, limits = c(0, max(survival_data$surv_time))) +
     ggplot2::scale_y_continuous(limits = c(0, 1), labels = scales::percent_format(accuracy = 1)) +
     ggplot2::labs(
       title = paste0(title, " (N=", nrow(survival_data), ")"),
       subtitle = paste0("Log-rank p = ", format_pvalue(p_value)),
       x = x_label,
-      y = "Survival probability",
+      y = if (curated_mode && event_variable == "Recur") "Recurrence-only event-free probability" else "Survival probability",
+      caption = if (curated_mode && event_variable == "Recur") "Recorded recurrence endpoint; deaths are not added as events. This is not cumulative incidence." else NULL,
       color = legend_title
     ) +
     ggplot2::guides(color = ggplot2::guide_legend(nrow = legend_rows, byrow = TRUE)) +
@@ -632,12 +654,16 @@ run_survival_plot <- function(data, group_variable, time_variable, event_variabl
       plot.margin = ggplot2::margin(10, 10, 10, 10)
     )
 
+  if (curated_mode) survival_plot <- survival_plot + ggplot2::labs(caption = paste(
+    survival_plot$labels$caption, pairwise_caption(pw, 105), sep = "\n")) +
+    ggplot2::theme(plot.caption = ggplot2::element_text(size = 9, hjust = 0))
+
   number_at_risk_plot <- ggplot2::ggplot(
     risk_table,
     ggplot2::aes(time, group, label = n_risk)
   ) +
     ggplot2::geom_text(size = 3.3) +
-    ggplot2::scale_x_continuous(breaks = time_breaks, limits = range(time_breaks)) +
+    ggplot2::scale_x_continuous(breaks = time_breaks, limits = c(0, max(survival_data$surv_time))) +
     ggplot2::labs(title = "Number at risk", x = x_label, y = NULL) +
     ggplot2::theme_classic(base_size = 11) +
     ggplot2::theme(
@@ -656,8 +682,17 @@ run_survival_plot <- function(data, group_variable, time_variable, event_variabl
       heights = grid::unit(c(0.70, 0.30), "npc")
     )
   ))
-  print(survival_plot, vp = grid::viewport(layout.pos.row = 1, layout.pos.col = 1))
-  print(number_at_risk_plot, vp = grid::viewport(layout.pos.row = 2, layout.pos.col = 1))
+  curve_grob <- ggplot2::ggplotGrob(survival_plot)
+  risk_grob <- ggplot2::ggplotGrob(number_at_risk_plot)
+  shared_widths <- grid::unit.pmax(curve_grob$widths, risk_grob$widths)
+  curve_grob$widths <- shared_widths
+  risk_grob$widths <- shared_widths
+  grid::pushViewport(grid::viewport(layout.pos.row = 1, layout.pos.col = 1))
+  grid::grid.draw(curve_grob)
+  grid::upViewport()
+  grid::pushViewport(grid::viewport(layout.pos.row = 2, layout.pos.col = 1))
+  grid::grid.draw(risk_grob)
+  grid::upViewport()
   close_device()
   on.exit(NULL, add = FALSE)
 
@@ -683,18 +718,18 @@ writexl::write_xlsx(
 message("[2/4] Drawing KRAS-subtype and driver-count pie charts")
 make_pie_chart(
   driver_data,
-  "KRAS_subtype",
-  "KRAS subtype distribution",
+  "KRAS_MAF_group",
+  "MAF-derived KRAS subtype distribution",
   output_path(config, "11_KRAS_subtype_pie.png"),
-  c("G12D", "G12V", "G12R", "Other KRAS", "WT"),
+  c("G12D", "G12V", "G12R", "Other KRAS", kras_absent_label),
   config$plot_dpi
 )
 make_pie_chart(
   driver_data,
   "driver_mutation_count_exact",
-  "Driver gene mutation count",
+  "Number of altered driver genes",
   output_path(config, "12_Driver_mutation_status_pie.png"),
-  paste0(0:4, " Mutations"),
+  paste0(0:4, " genes"),
   config$plot_dpi
 )
 
@@ -727,45 +762,46 @@ rfs_time_variable <- if ("RFS_m" %in% names(driver_data) && any(!is.na(driver_da
 
 if (all(c(os_time_variable, "survive") %in% names(driver_data))) {
   run_survival_plot(
-    driver_data, "KRAS_subtype", os_time_variable, "survive",
-    "OS by KRAS subtype",
+    driver_data, "KRAS_MAF_group", os_time_variable, "survive",
+    "OS by MAF-derived KRAS subtype",
     output_path(config, "14_OS_by_KRAS_subtype.png"),
     "KRAS subtype", config$plot_dpi
   )
   run_survival_plot(
     driver_data, "driver_mutation_count_exact", os_time_variable, "survive",
-    "OS by driver mutation count",
+    "OS by number of altered driver genes",
     output_path(config, "15_OS_by_driver_mutation_count_exact.png"),
-    "Driver mutation count", config$plot_dpi
+    "Number of altered driver genes", config$plot_dpi
   )
   run_survival_plot(
     driver_data, "driver_mutation_count_collapsed", os_time_variable, "survive",
-    "OS by driver mutation count",
+    "OS by number of altered driver genes",
     output_path(config, "15_2_OS_by_driver_mutation_count_0_12_34.png"),
-    "Driver mutation count", config$plot_dpi
+    "Number of altered driver genes", config$plot_dpi
   )
 } else {
   message("Skipping OS plots: no compatible OS time/event columns were found.")
 }
 
 if (all(c(rfs_time_variable, "Recur") %in% names(driver_data))) {
+  recurrence_label <- if (curated_mode) "Recurrence-only event-free time" else "RFS"
   run_survival_plot(
-    driver_data, "KRAS_subtype", rfs_time_variable, "Recur",
-    "RFS by KRAS subtype",
+    driver_data, "KRAS_MAF_group", rfs_time_variable, "Recur",
+    paste(recurrence_label, "by MAF-derived KRAS subtype"),
     output_path(config, "16_RFS_by_KRAS_subtype.png"),
     "KRAS subtype", config$plot_dpi
   )
   run_survival_plot(
     driver_data, "driver_mutation_count_exact", rfs_time_variable, "Recur",
-    "RFS by driver mutation count",
+    paste(recurrence_label, "by number of altered driver genes"),
     output_path(config, "17_RFS_by_driver_mutation_count_exact.png"),
-    "Driver mutation count", config$plot_dpi
+    "Number of altered driver genes", config$plot_dpi
   )
   run_survival_plot(
     driver_data, "driver_mutation_count_collapsed", rfs_time_variable, "Recur",
-    "RFS by driver mutation count",
+    paste(recurrence_label, "by number of altered driver genes"),
     output_path(config, "17_2_RFS_by_driver_mutation_count_0_12_34.png"),
-    "Driver mutation count", config$plot_dpi
+    "Number of altered driver genes", config$plot_dpi
   )
 } else {
   message("Skipping RFS plots: no compatible RFS time/event columns were found.")

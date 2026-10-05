@@ -1,0 +1,42 @@
+Master_variable	Analysis_variable	Type	Definition/Coding	Role	Notes
+NGS_report_id	NGS_report_id	Identifier	Synthetic report identifier.	Identifier	Entirely invented example; not patient-derived.
+Tumor_Sample_Barcode	Tumor_Sample_Barcode	Identifier	Unique synthetic sample linkage key.	Identifier	Entirely invented example; not patient-derived.
+patient_id	patient_id	Identifier	Synthetic patient ID; repeated IDs demonstrate duplicate handling.	Identifier	Entirely invented example; not patient-derived.
+Age	Age	Continuous	Age at pathology examination; years.	Analysis	Entirely invented example; not patient-derived.
+Sex	Sex	Categorical	F=female; M=male.	Analysis	Entirely invented example; not patient-derived.
+BMI	BMI	Continuous	kg/m^2; NA is missing.	Analysis	Entirely invented example; not patient-derived.
+Diabetes	Diabetes	Categorical	Synthetic category in the example; see project mapping documentation.	Analysis	Entirely invented example; not patient-derived.
+Other_cancer	Other_cancer	Categorical	Synthetic category in the example; see project mapping documentation.	Analysis	Entirely invented example; not patient-derived.
+CA19_9	CA19_9	Continuous	Synthetic category in the example; see project mapping documentation.	Analysis	Entirely invented example; not patient-derived.
+CEA	CEA	Continuous	Synthetic category in the example; see project mapping documentation.	Analysis	Entirely invented example; not patient-derived.
+NGS_group	NGS_group	Categorical	Curated label; do not infer timing or resectability.	Analysis	Entirely invented example; not patient-derived.
+Neoadjuvant	Neoadjuvant	Categorical	Synthetic category in the example; see project mapping documentation.	Analysis	Entirely invented example; not patient-derived.
+Preop_platinum_exposure	Preop_platinum_exposure	Categorical	Synthetic category in the example; see project mapping documentation.	Analysis	Entirely invented example; not patient-derived.
+Operation	Operation	Categorical	Synthetic category in the example; see project mapping documentation.	Analysis	Entirely invented example; not patient-derived.
+ASA	ASA	Categorical	Synthetic category in the example; see project mapping documentation.	Analysis	Entirely invented example; not patient-derived.
+Differentiation	Differentiation	Categorical	Synthetic category in the example; see project mapping documentation.	Analysis	Entirely invented example; not patient-derived.
+Tumor_size	Tumor_size	Continuous	Source numeric size; unit must be confirmed.	Analysis	Entirely invented example; not patient-derived.
+LVI	LVI	Categorical	Synthetic category in the example; see project mapping documentation.	Analysis	Entirely invented example; not patient-derived.
+PNI	PNI	Categorical	Synthetic category in the example; see project mapping documentation.	Analysis	Entirely invented example; not patient-derived.
+T_stage	T_stage	Categorical	Synthetic category in the example; see project mapping documentation.	Analysis	Entirely invented example; not patient-derived.
+N_stage	N_stage	Categorical	Synthetic category in the example; see project mapping documentation.	Analysis	Entirely invented example; not patient-derived.
+LN_positive	LN_positive	Categorical	0=negative; 1=positive.	Analysis	Entirely invented example; not patient-derived.
+M_stage	M_stage	Categorical	0=M0; 1=M1.	Analysis	Entirely invented example; not patient-derived.
+AJCC_stage	AJCC_stage	Categorical	Synthetic category in the example; see project mapping documentation.	Analysis	Entirely invented example; not patient-derived.
+R_status	R_status	Categorical	R0 or R1; threshold not specified.	Analysis	Entirely invented example; not patient-derived.
+HG_PanIN	HG_PanIN	Categorical	Yes=explicit qualifying annotation; No=no such annotation.	Analysis	Entirely invented example; not patient-derived.
+IPMN_HGD	IPMN_HGD	Categorical	Yes=explicit qualifying annotation; No=no such annotation.	Analysis	Entirely invented example; not patient-derived.
+Adjuvant_treatment	Adjuvant_treatment	Categorical	Synthetic category in the example; see project mapping documentation.	Analysis	Entirely invented example; not patient-derived.
+Adjuvant_chemotherapy	Adjuvant_chemotherapy	Categorical	Synthetic category in the example; see project mapping documentation.	Analysis	Entirely invented example; not patient-derived.
+Adjuvant_radiotherapy	Adjuvant_radiotherapy	Categorical	y=recorded radiotherapy; blank is unknown, not No.	Analysis	Entirely invented example; not patient-derived.
+KRAS_subtype	KRAS_subtype	Categorical	Report-derived label; WT/Not detected is not MAF-confirmed wild type.	Analysis	Entirely invented example; not patient-derived.
+KRAS_subtype_MAF	KRAS_subtype_MAF	Categorical	Workbook MAF-derived group: G12D, G12V, G12R, Other, or Not detected.	Analysis	Entirely invented example; not patient-derived.
+TMB	TMB	Continuous	Reported mutations/Mb; not a MAF row count.	Analysis	Entirely invented example; not patient-derived.
+MSI	MSI	Categorical	Synthetic category in the example; see project mapping documentation.	Analysis	Entirely invented example; not patient-derived.
+Tumor_cellularity	Tumor_cellularity	Continuous	Percentage points.	Analysis	Entirely invented example; not patient-derived.
+Recurrence_event	Recurrence_event	Categorical	y=recurrence; n=no recorded recurrence; NA=unavailable or undefined.	Analysis	Entirely invented example; not patient-derived.
+Recurrence_pattern	Recurrence_pattern	Categorical	Observed Local only / Distant only / Local + distant.	Analysis	Entirely invented example; not patient-derived.
+Distant_pattern	Distant_pattern	Categorical	Site category for Distant only recurrence.	Analysis	Entirely invented example; not patient-derived.
+DFS_months	DFS_months	Continuous	Months from surgery to recorded recurrence or last recurrence assessment; not death-inclusive DFS.	Analysis	Entirely invented example; not patient-derived.
+Death_event	Death_event	Categorical	y=death; n=censored.	Analysis	Entirely invented example; not patient-derived.
+OS_months	OS_months	Continuous	Months from surgery to death or last survival follow-up.	Analysis	Entirely invented example; not patient-derived.

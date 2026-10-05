@@ -13,13 +13,17 @@
 project_root <- normalizePath(getwd(), winslash = "/", mustWork = TRUE)
 
 analysis_scripts <- c(
+  "scripts/clinical_update_audit.R",
   "scripts/oncoplots.R",
   "scripts/clinical_summary.R",
   "scripts/clinical_group_comparisons.R",
   "scripts/mutation_heatmaps.R",
   "scripts/somatic_interactions.R",
   "scripts/stage_distribution.R",
-  "scripts/driver_kras_survival.R"
+  "scripts/driver_kras_survival.R",
+  "scripts/literature_extensions.R",
+  "scripts/source_comparisons.R",
+  "scripts/repair_gene_profiles.R"
 )
 
 missing_scripts <- analysis_scripts[!file.exists(file.path(project_root, analysis_scripts))]
@@ -46,6 +50,13 @@ if (!grepl("^(/|[A-Za-z]:[/\\])", config_file)) {
   config_file <- file.path(project_root, config_file)
 }
 config_file <- normalizePath(config_file, winslash = "/", mustWork = TRUE)
+source("R/config.R")
+selected_config <- load_config(config_file, project_root)
+if (identical(selected_config$analysis_profile, "manuscript")) {
+  # Publication outputs have one selected KRAS source. Internal source-QC
+  # scripts are intentionally not invoked by this profile.
+  analysis_scripts <- "scripts/manuscript_analysis.R"
+}
 
 rscript <- file.path(R.home("bin"), "Rscript")
 

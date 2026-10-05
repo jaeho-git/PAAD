@@ -1,5 +1,18 @@
 # 분석 대응표
 
+**현재 논문용 경로:** `run_all.R`은 `clinical_schema="curated_v3"`, `analysis_profile="manuscript"`에서 `scripts/manuscript_analysis.R`을 실행합니다. 현재 로컬 설정은 `data/raw/260927_v3_PDAC_ANALYSIS_with_MAF_annotations.xlsx`의 `Main` 시트와 `PDAC_oncopanel.maf`를 읽고, 1,015행에서 중복 환자 ID 4행만 제외한 1,011명(M0 972, M1 39)을 분석합니다. 결과는 `outputs/updated_v3_20260928/manuscript_extension_20261005/`에 저장됩니다.
+
+| 현재 논문 주장 | 구현 위치 | 주요 출력 |
+| --- | --- | --- |
+| 코호트·oncoplot·KRAS 아형 | `scripts/manuscript_analysis.R`, `R/cohort_flow.R`, `R/oncoplot_annotations.R` | Figure 1, Table 1 |
+| Driver–병리 연관성 | `scripts/manuscript_analysis.R`, `R/pairwise_tests.R` | Figure 2, `Input_Figure2_*` |
+| 선행 platinum 임상·생존·HRD/MMR 비교 | `R/manuscript_story_extensions.R`, `R/recurrence_signature_extensions.R` | Figure 3, `Input_Preop_platinum_*` |
+| 3군 재발, Distant only 3군 및 확장 5군 재발 후 생존 | `R/manuscript_story_extensions.R`, `R/recurrence_signature_extensions.R` | Figure 4, `Input_*recurrence*` |
+| Driver 및 KRAS 아형 생존 | `scripts/manuscript_analysis.R`, `R/forest_display.R` | Figure 5, Table 2 |
+| Targeted-panel SBS 가능성·민감도 | `scripts/mutational_signature_analysis.py` | Supplementary Figure 4–5, 집계 `Input_*signature*`; 환자별 결과는 `private/` |
+
+**기존 이력:** 아래 검증 상태와 환자 수는 기존 v19 리팩터링 당시의 기록입니다. 새 임상파일의 이전 확장 분석은 [updated_analysis.md](updated_analysis.md)에 설명합니다. legacy 실행 경로와 현재 논문용 실행 경로를 혼동하지 마십시오.
+
 이 문서는 기준 통합 스크립트 `PDAC_plot_n527_modified_v19_publication_update.R`의 분석을 새 실행 파일과 연결한다. 원본의 줄 번호는 조사한 v19 파일(SHA-256 `c88ceb7476c6a7767f30f6036ed811c74b7fb50d4f4393cd53ef94b87c98b073`) 기준이다. 파일명의 `n527`은 원본 대상 목록을 가리킬 뿐이며, 아래 분석의 최종 환자 또는 검체 수가 527임을 뜻하지 않는다.
 
 모든 명령은 저장소 루트에서 실행한다. 실제 자료는 `data/raw/`에만 로컬로 복제되며 Git에서 제외된다. `config/local.R`을 사용하는 실행은 그 실제 자료를 읽고, 결과를 설정된 `outputs/` 하위 경로에 새로 만든다. 기존 결과 폴더의 파일은 복사하거나 덮어쓰지 않는다.

@@ -1,13 +1,13 @@
 #!/usr/bin/env Rscript
 
-# 목적: 임상 그룹별 유전자 변이 빈도와 retained MAF row count("TMB")를 비교합니다.
+# 목적: 임상 그룹별 유전자 변이 빈도와 retained MAF row count("MAF_variant_count")를 비교합니다.
 # 입력: config 파일에 지정된 임상 XLSX, 대상 환자 TXT, MAF 파일
 # 출력: 각 임상 변수별 4_FreqPlot_PDAC_<변수>.png 및 4_TMB_BoxPlot_PDAC_<변수>.png
 # 실행(저장소 루트에서):
 #   Rscript --vanilla scripts/clinical_group_comparisons.R --config=config/local.R
 # 합성 예제 실행:
 #   Rscript --vanilla scripts/clinical_group_comparisons.R --config=config/config.synthetic.R
-# 주의: 이 프로젝트의 기존 "TMB" 값은 mutations/Mb가 아니라 샘플별 retained MAF 행 수입니다.
+# 주의: 이 프로젝트의 기존 "MAF_variant_count" 값은 mutations/Mb가 아니라 샘플별 retained MAF 행 수입니다.
 
 # 이 스크립트는 경로 해석을 단순하게 유지하기 위해 반드시 저장소 루트에서 실행합니다.
 PROJECT_ROOT <- normalizePath(getwd(), winslash = "/", mustWork = TRUE)
@@ -23,6 +23,7 @@ if (!all(file.exists(file.path(PROJECT_ROOT, required_project_files)))) {
 # 공통 설정 읽기와 입력 전처리 helper만 재사용합니다.
 source(file.path(PROJECT_ROOT, "R", "config.R"))
 source(file.path(PROJECT_ROOT, "R", "data.R"))
+source(file.path(PROJECT_ROOT, "R", "pairwise_tests.R"))
 
 comparison_level_order <- function(variable, observed) {
   # Group order is part of this analysis definition and is therefore kept next
@@ -141,10 +142,10 @@ compare_one_clinical_variable <- function(
     ggplot2::scale_fill_brewer(palette = "Pastel1", drop = FALSE) +
     ggplot2::scale_x_discrete(drop = FALSE) +
     ggplot2::labs(
-      title = paste0("[", output_prefix, "] Mutation Frequency by ", variable),
+      title = paste0("[", output_prefix, "] Variant frequency by ", figure_label(variable)),
       subtitle = cohort_subtitle,
       y = "Frequency (%)",
-      x = "Gene"
+      x = "Gene", fill = figure_label(variable)
     ) +
     ggplot2::theme_classic() +
     ggplot2::theme(
@@ -165,6 +166,15 @@ compare_one_clinical_variable <- function(
       )
   }
 
+  if (identical(config$clinical_schema, "curated_v3")) {
+    pw <- dplyr::bind_rows(lapply(top_genes, function(gene) {
+      calls <- clinical_grouped$Tumor_Sample_Barcode %in% top_gene_mutations$Tumor_Sample_Barcode[top_gene_mutations$Hugo_Symbol == gene]
+      p <- pairwise_categorical(calls, clinical_grouped[[variable]])
+      if (nrow(p)) cbind(data.frame(gene, variable), p) else NULL
+    }))
+    readr::write_tsv(pw, file.path(output_dir, paste0("4_Frequency_pairwise_", variable, ".tsv")))
+    frequency_plot <- frequency_plot + ggplot2::labs(caption = paste0("Stars: nominal omnibus Fisher p. All pairs with Holm p: 4_Frequency_pairwise_", variable, ".tsv"))
+  }
   frequency_file <- file.path(
     output_dir,
     paste0("4_FreqPlot_", output_prefix, "_", variable, ".png")
@@ -180,16 +190,16 @@ compare_one_clinical_variable <- function(
 
   # 기존 v19 분석과 같은 정의: MAF에서 유지된 행을 샘플별로 셉니다.
   mutation_counts <- maf@data |>
-    dplyr::count(Tumor_Sample_Barcode, name = "TMB") |>
+    dplyr::count(Tumor_Sample_Barcode, name = "MAF_variant_count") |>
     dplyr::right_join(clinical_grouped, by = "Tumor_Sample_Barcode") |>
     dplyr::mutate(
-      TMB = tidyr::replace_na(TMB, 0L),
+      MAF_variant_count = tidyr::replace_na(MAF_variant_count, 0L),
       "{variable}" := factor(as.character(.data[[variable]]), levels = all_levels)
     )
 
   test_label <- "Statistical test not performed"
   if (length(observed_levels) >= 2L) {
-    formula <- stats::as.formula(paste0("TMB ~ `", variable, "`"))
+    formula <- stats::as.formula(paste0("MAF_variant_count ~ `", variable, "`"))
     test <- tryCatch(
       if (length(observed_levels) == 2L) {
         stats::wilcox.test(
@@ -212,19 +222,25 @@ compare_one_clinical_variable <- function(
 
   tmb_plot <- ggplot2::ggplot(
     mutation_counts,
-    ggplot2::aes(x = .data[[variable]], y = TMB, fill = .data[[variable]])
+    ggplot2::aes(x = .data[[variable]], y = MAF_variant_count, fill = .data[[variable]])
   ) +
     ggplot2::geom_boxplot(outlier.shape = NA, alpha = 0.7, width = 0.65) +
     ggplot2::geom_jitter(width = 0.2, alpha = 0.5, size = 1) +
     ggplot2::scale_fill_brewer(palette = "Pastel1", drop = FALSE) +
     ggplot2::scale_x_discrete(drop = FALSE) +
     ggplot2::labs(
-      title = paste0("[", output_prefix, "] TMB Distribution by ", variable),
+      title = paste0("[", output_prefix, "] Variant count by ", figure_label(variable)),
       subtitle = paste0(cohort_subtitle, "\n", test_label),
-      y = "TMB"
+      y = "Variant count", x = figure_label(variable), fill = figure_label(variable)
     ) +
     ggplot2::theme_classic()
 
+  if (identical(config$clinical_schema, "curated_v3")) {
+    pw <- pairwise_numeric(mutation_counts$MAF_variant_count, mutation_counts[[variable]])
+    readr::write_tsv(pw, file.path(output_dir, paste0("4_Variant_count_pairwise_", variable, ".tsv")))
+    tmb_plot <- tmb_plot + ggplot2::labs(caption = pairwise_caption(pw, 75)) +
+      ggplot2::theme(plot.caption = ggplot2::element_text(size = 8, hjust = 0))
+  }
   tmb_file <- file.path(
     output_dir,
     paste0("4_TMB_BoxPlot_", output_prefix, "_", variable, ".png")
@@ -232,8 +248,8 @@ compare_one_clinical_variable <- function(
   ggplot2::ggsave(
     tmb_file,
     tmb_plot,
-    width = 6,
-    height = 6,
+    width = 9,
+    height = 8,
     dpi = dpi,
     bg = "white"
   )
@@ -256,6 +272,8 @@ run_clinical_group_comparisons <- function(data, config) {
     c("Differentiation", "NAC", "T", "N", "N_status", "Stage", "Stage_Group"),
     names(data$clinical)
   )
+  if (identical(config$clinical_schema, "curated_v3")) comparison_variables <- c(
+    "Differentiation", "Neoadjuvant", "T_stage", "N_stage", "LN_positive", "AJCC_stage", "Stage_Group")
   top_genes <- maftools::getGeneSummary(data$maf) |>
     dplyr::slice_head(n = config$top_n) |>
     dplyr::pull(Hugo_Symbol)

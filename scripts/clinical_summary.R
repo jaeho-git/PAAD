@@ -42,7 +42,7 @@ write_clinical_summary <- function(clinical, variables, filename) {
         )
     }
   })
-  names(summary_sheets) <- variables
+  names(summary_sheets) <- clinical_label(variables)
 
   writexl::write_xlsx(summary_sheets, filename)
   invisible(filename)
@@ -58,6 +58,8 @@ run_clinical_summary <- function(data, config) {
     ),
     names(data$clinical)
   )
+  if (identical(config$clinical_schema, "curated_v3")) variables <- c(curated_continuous(), curated_categorical(), "Age_group", "Stage_Group")
+  variables <- intersect(variables, names(data$clinical))
   output_file <- output_path(config, "2_Clinical_Table_PDAC.xlsx")
 
   message("Writing clinical summary for ", nrow(data$clinical), " PDAC samples.")

@@ -10,6 +10,10 @@
 /data/processed/
 /data/private/
 
+# Local reference articles; keep citation/analysis notes in Git, not publisher PDFs
+/docs/1_Cancer_2020_McIntyre_MSK.pdf
+/docs/2_Ann_Surg_2025_Campbell.pdf
+
 # Legacy source-project data/result directories must never be copied here
 /00_Data/
 /01_Results/
@@ -29,6 +33,8 @@
 # Test and tool caches
 /.cache/
 /.pytest_cache/
+__pycache__/
+*.pyc
 /tests/testthat/_snaps/*.new
 
 # Editor and operating-system files
@@ -42,4 +48,3 @@ Thumbs.db
 /*.zip
 /*.tar
 /*.tar.gz
-

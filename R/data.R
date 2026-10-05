@@ -1,4 +1,41 @@
 # Shared input preparation only.
+
+# Display-only labels: raw column names and original data are preserved.
+# Approved workbook mapping: original column names in data, short display labels.
+clinical_label <- function(x) {
+  labels <- c(Preop_platinum_exposure = "Preop_platinum", Operation = "OP",
+    Adjuvant_treatment = "Adjuvant_Tx", Adjuvant_chemotherapy = "Adjuvant_CT",
+    Adjuvant_radiotherapy = "Adjuvant_RT")
+  out <- x; i <- x %in% names(labels); out[i] <- unname(labels[x[i]]); out
+}
+# Clear figure labels are separate from approved analysis-column aliases.
+figure_label <- function(x) {
+  labels <- c(Age = "Age (years)", Age10 = "Age (per 10 years)", Age_group = "Age group",
+    Tumor_size = "Tumor size", TMB = "Reported TMB", MAF_variant_count = "Variant count",
+    Preop_platinum_exposure = "Preoperative platinum", Operation = "Surgery type",
+    Adjuvant_treatment = "Adjuvant treatment", Adjuvant_chemotherapy = "Adjuvant chemotherapy",
+    Adjuvant_radiotherapy = "Adjuvant radiotherapy", Neoadjuvant = "Neoadjuvant treatment",
+    T_stage = "T category", N_stage = "N category", LN_positive = "Lymph-node involvement",
+    M_stage = "M category", AJCC_stage = "AJCC stage", Stage_Group = "Stage group",
+    R_status = "Resection margin", LVI = "Lymphovascular invasion", PNI = "Perineural invasion",
+    NGS_group = "NGS group (source category)", MSI = "MSI (clinical report)",
+    OS_months = "Overall survival (months)", DFS_months = "Recorded recurrence follow-up (months)",
+    KRAS_subtype = "Clinical KRAS subtype", KRAS_subtype_MAF = "Workbook MAF-based KRAS subtype",
+    KRAS_subtype_raw = "Re-derived MAF KRAS subtype",
+    KRAS_clinical_group = "Clinical KRAS subtype", KRAS_MAF_group = "Re-derived MAF KRAS subtype",
+    KRAS_workbook_MAF_group = "Workbook MAF-based KRAS subtype")
+  out <- gsub("_", " ", x); i <- x %in% names(labels); out[i] <- unname(labels[x[i]]); out
+}
+excluded_analysis_fields <- function(x) {
+  x[grepl("purity|cellularity|cellarity|(^|_)loh($|_)", x, ignore.case = TRUE)]
+}
+curated_continuous <- function() c("Age", "BMI", "CA19_9", "CEA", "Tumor_size", "TMB", "OS_months", "DFS_months")
+curated_categorical <- function() c("Sex", "Diabetes", "Other_cancer", "NGS_group", "Neoadjuvant",
+  "Preop_platinum_exposure", "Operation", "ASA", "Differentiation", "LVI", "PNI",
+  "T_stage", "N_stage", "LN_positive", "M_stage", "AJCC_stage", "R_status",
+  "HG_PanIN", "IPMN_HGD", "Adjuvant_treatment", "Adjuvant_chemotherapy",
+  "Adjuvant_radiotherapy", "KRAS_subtype", "MSI", "Death_event", "Recurrence_event",
+  "Recurrence_pattern", "Distant_pattern")
 #
 # This file does not define any figure, statistical comparison, driver rule, or
 # survival analysis. It performs the steps every analysis needs in exactly the
@@ -144,11 +181,104 @@ prepare_clinical_data <- function(clinical_data, target_patients, sex_column_pol
     dplyr::filter(grepl("PDAC", Classification, ignore.case = TRUE))
 }
 
+prepare_curated_clinical <- function(raw, dictionary) {
+  # The updated workbook is authoritative. Never replace its outcomes or
+  # pathology with the old target-patient TXT. Names/meaning were checked against
+  # Data_dictionary; all source fields remain available for the new analyses.
+  required <- c("Tumor_Sample_Barcode", "patient_id", "Age", "Sex", "BMI",
+    "CA19_9", "CEA", "Neoadjuvant", "Differentiation", "Tumor_size",
+    "T_stage", "N_stage", "LN_positive", "M_stage", "AJCC_stage", "R_status",
+    "LVI", "PNI", "KRAS_subtype", "KRAS_subtype_MAF", "TMB", "Recurrence_event", "DFS_months",
+    "Death_event", "OS_months")
+  missing <- setdiff(required, names(raw))
+  if (length(missing)) stop("Curated clinical columns missing: ", paste(missing, collapse = ", "))
+  if (!all(c("Analysis_variable", "Definition/Coding") %in% names(dictionary)) ||
+      !all(required %in% dictionary$Analysis_variable)) {
+    stop("Data_dictionary does not document all required analysis columns.")
+  }
+  clean <- function(x) {
+    y <- trimws(as.character(x)); y[y %in% c("", "NA", "N/A")] <- NA_character_; y
+  }
+  binary <- function(x, variable) {
+    y <- clean(x)
+    if (any(!is.na(y) & !y %in% c("y", "n"))) stop("Unexpected y/n code in ", variable)
+    ifelse(is.na(y), NA_integer_, as.integer(y == "y"))
+  }
+  raw <- as.data.frame(raw)
+  raw[] <- lapply(raw, function(x) if (is.character(x)) clean(x) else x)
+  raw$Tumor_Sample_Barcode <- clean(raw$Tumor_Sample_Barcode)
+  if (anyNA(raw$Tumor_Sample_Barcode) || anyDuplicated(raw$Tumor_Sample_Barcode)) {
+    stop("Curated barcode must be nonmissing and unique; resolve duplicates before analysis.")
+  }
+  raw$patient_id <- clean(raw$patient_id)
+  if (anyNA(raw$patient_id)) stop("Curated patient_id is missing.")
+  raw$patient_duplicate <- duplicated(raw$patient_id) | duplicated(raw$patient_id, fromLast = TRUE)
+  for (v in c("Age", "BMI", "CA19_9", "CEA", "Tumor_size", "TMB", "DFS_months", "OS_months")) {
+    parsed <- suppressWarnings(as.numeric(raw[[v]]))
+    if (any(!is.na(raw[[v]]) & (is.na(parsed) | !is.finite(parsed)))) stop("Non-numeric value in ", v)
+    raw[[v]] <- parsed
+  }
+  for (v in c("T_stage", "N_stage", "LN_positive", "M_stage")) raw[[v]] <- as.character(raw[[v]])
+  allowed <- list(Sex = c("F", "M"), T_stage = c("1", "2", "3", "4", "0"),
+    N_stage = c("0", "1", "2"), LN_positive = c("0", "1"), M_stage = c("0", "1"),
+    R_status = c("R0", "R1", "R2"), Differentiation = c("wd", "md", "pd"))
+  for (v in names(allowed)) if (any(!is.na(raw[[v]]) & !raw[[v]] %in% allowed[[v]])) stop("Unrecognized curated category: ", v)
+  raw$Classification <- "PDAC" # Curated PDAC cohort; old workbook cross-check is exported by the audit.
+  raw$NAC <- ifelse(binary(raw$Neoadjuvant, "Neoadjuvant") == 1L, "Yes", "No")
+  raw$Size <- raw$Tumor_size # Source units are unconfirmed: no unit conversion.
+  raw$T <- ifelse(is.na(raw$T_stage), NA_character_, paste0("T", raw$T_stage))
+  raw$N <- ifelse(is.na(raw$N_stage), NA_character_, paste0("N", raw$N_stage))
+  raw$N_status <- ifelse(is.na(raw$LN_positive), NA_character_, paste0("N", raw$LN_positive))
+  raw$Stage <- raw$AJCC_stage
+  raw$Stage_Group <- sub("[AB]$", "", raw$Stage)
+  raw$Differentiation <- toupper(raw$Differentiation)
+  for (v in c("LVI", "PNI")) raw[[v]] <- ifelse(binary(raw[[v]], v) == 1L, "Positive", "Negative")
+  raw$RM <- ifelse(raw$R_status == "R0", "Negative", ifelse(raw$R_status %in% c("R1", "R2"), "Positive", NA_character_))
+  raw$OS_m <- raw$OS_months
+  raw$survive <- binary(raw$Death_event, "Death_event")
+  raw$RFS_m <- raw$DFS_months # Legacy alias only. Plot labels explicitly say recurrence-only.
+  raw$Recur <- binary(raw$Recurrence_event, "Recurrence_event")
+  if (any(raw$OS_m <= 0, na.rm = TRUE) || any(raw$RFS_m <= 0, na.rm = TRUE)) {
+    stop("Nonpositive survival/recurrence times require review before analysis.")
+  }
+  if (any(raw$Recur == 1 & raw$RFS_m > raw$OS_m + 0.05, na.rm = TRUE)) {
+    stop("A recorded recurrence occurs after the OS follow-up/death time; review source times.")
+  }
+  raw$RFS_m[raw$M_stage == "1"] <- NA_real_
+  raw$Recur[raw$M_stage == "1"] <- NA_integer_
+  raw$KRAS_report <- raw$KRAS_subtype
+  # Both workbook KRAS fields are preserved. KRAS_subtype_MAF is the selected
+  # manuscript source when kras_source = "workbook_maf"; KRAS_subtype remains
+  # available for private audit only and is never mixed into that analysis.
+  raw$TMB_report <- raw$TMB
+  # MAF_variant_count is computed separately in the genomic analyses.
+  raw$Age_group <- ifelse(raw$Age <= 55, "Age <=55", ifelse(raw$Age >= 70, "Age >=70", "Age 56-69"))
+  for (v in intersect(c("ASA", "T_stage", "N_stage", "LN_positive", "M_stage"), names(raw))) raw[[v]] <- factor(raw[[v]])
+  raw$primary_eligible <- !raw$patient_duplicate
+  raw
+}
+
 load_analysis_data <- function(config) {
   # Read and connect the clinical workbook, target-patient table, and MAF.
   # The returned list is the complete common input used by scripts/*.R.
   load_analysis_packages()
   clinical_raw <- readxl::read_excel(config$clinical_file, sheet = config$clinical_sheet)
+  if (identical(config$clinical_schema, "curated_v3")) {
+    dictionary <- readxl::read_excel(config$clinical_file, sheet = "Data_dictionary")
+    clinical_all <- prepare_curated_clinical(clinical_raw, dictionary)
+    keep <- if (config$updated_cohort == "localized_unique") (clinical_all$primary_eligible & !is.na(clinical_all$M_stage) & clinical_all$M_stage == "0") else clinical_all$primary_eligible
+    clinical <- clinical_all[keep, , drop = FALSE]
+    message("Curated workbook: ", nrow(clinical_all), " samples; analysis cohort: ", nrow(clinical),
+            "; policy: ", config$updated_cohort, ". Old target list is NOT used to select or overwrite patients.")
+    # Establish MAF coverage before any absent mutation is coded as zero.
+    maf_table <- readr::read_tsv(config$maf_file, comment = "#", show_col_types = FALSE)
+    missing_maf <- setdiff(clinical_all$Tumor_Sample_Barcode, maf_table$Tumor_Sample_Barcode)
+    if (length(missing_maf)) stop(length(missing_maf), " curated barcodes have no MAF records; do not infer wild type.")
+    maf_raw <- maftools::read.maf(maf = config$maf_file, clinicalData = clinical, verbose = FALSE)
+    maf <- maftools::subsetMaf(maf = maf_raw, tsb = clinical$Tumor_Sample_Barcode)
+    message("MAF calls are retained variants, not confirmed pathogenic alterations; no CNA/LOH or germline data.")
+    return(list(clinical = clinical, clinical_all = clinical_all, dictionary = dictionary, maf = maf, config = config))
+  }
   target_patients <- readr::read_tsv(
     config$target_patients_file,
     locale = readr::locale(encoding = config$target_encoding),

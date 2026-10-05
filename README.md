@@ -6,6 +6,20 @@ PAAD 환자의 targeted exome sequencing 자료와 임상정보를 이용한 PDA
 
 이 저장소는 공개 가능한 코드·문서·합성 예제만 Git으로 관리합니다. 실제 환자자료와 새 분석 결과는 로컬에만 보관합니다.
 
+## 업데이트 임상파일 분석
+
+`Main`과 `Data_dictionary` 시트가 있는 새 임상파일은 `clinical_schema = "curated_v3"`로 읽습니다. 이 모드에서는 새 파일의 임상·병리·생존 값을 사용하고, 예전 대상 TXT는 비교 감사에만 사용합니다. 설정 예시는 `config/config.curated.example.R`입니다. **기존 `config/local.R`이 있으면 덮어쓰지 말고 필요한 항목을 확인하십시오.**
+
+새 임상자료의 기본 실행은 **논문용 분석**입니다. `run_all.R`이 `scripts/manuscript_analysis.R`을 실행하여 메인 Figure 1–5, Table 1–2와 선택된 보충자료를 만듭니다. M0·M1을 모두 포함하고 중복 환자 ID의 모든 행만 제외합니다. 현재 로컬 분석은 `data/raw/260927_v3_PDAC_ANALYSIS_with_MAF_annotations.xlsx`의 `Main` 시트를 사용하며, 1,015행 중 중복 환자 ID에 해당하는 4행을 제외한 1,011명을 분석합니다. 임상/MAF 출처 간 일치도 비교는 이 경로에서 생성하지 않습니다. 현재 논문용 KRAS 아형은 엑셀의 `KRAS_subtype_MAF`를 직접 사용하도록 `config/local.R`의 `kras_source = "workbook_maf"`로 고정했습니다. `"clinical"` 또는 원시 MAF 재계산값인 `"maf"`도 검증용 선택지로 남아 있지만 한 실행에서 서로 섞이지 않습니다.
+
+TMB는 임상정보의 **Reported TMB**를 탐색적으로 사용합니다. 단위·검사법을 확인하지 못한 상태에서는 mut/Mb 또는 TMB-high로 표시하지 않습니다. Variant count는 oncoplot의 기술적 주석이며 TMB 결측을 대체하지 않습니다. 기록된 재발은 사망 포함 DFS/RFS와 구분합니다. 새 결과 구성·재생성 방법은 [논문용 분석 및 문서 안내](docs/manuscript_analysis.md)를 먼저 읽으십시오. [이전 확장 분석 안내](docs/updated_analysis.md)는 내부 검토·기존 결과의 이력입니다.
+
+```sh
+Rscript --vanilla run_all.R --config=config/local.R
+```
+
+논문용 결과는 `output_dir/manuscript_subdir/`에 저장됩니다. 기본 하위 폴더명은 `manuscript`입니다. 과거 legacy 분석은 `output_dir`에 직접 저장됩니다. 실제 데이터·환자별 자료·산출물은 계속 Git에서 제외됩니다.
+
 ## 핵심 저장 원칙
 
 - 원본 프로젝트는 읽기 전용으로 취급합니다.
@@ -21,9 +35,10 @@ PAAD 환자의 targeted exome sequencing 자료와 임상정보를 이용한 PDA
 ```text
 PAAD/
 ├── R/                         # 설정·입력 전처리·공통 그림 보조 기능만 포함
-├── scripts/                   # 실제 분석 코드와 실행부가 함께 있는 파일 7개
+├── scripts/                   # manuscript_analysis.R + 문서 생성기 + 기존 분석 이력
 ├── config/
 │   ├── config.example.R       # 실제 로컬 입력용 공개 설정 예시
+│   ├── config.curated.example.R # 새 임상파일용 설정 예시
 │   ├── config.synthetic.R     # 합성 예제 smoke test 설정
 │   └── local.R                # 현재 컴퓨터의 실제 실행 설정; Git 제외
 ├── data/
@@ -37,7 +52,7 @@ PAAD/
 ├── outputs/                   # 새 실행 결과; Git 제외
 ├── local_notes/               # 비공개 조사·검증 기록; Git 제외
 ├── tests/run_tests.R          # 합성 자료 기반 통합 점검
-├── run_all.R                  # 아래 7개 분석 파일을 순서대로 실행
+├── run_all.R                  # curated_v3: 논문용 분석 / legacy: 기존 분석
 └── PAAD.Rproj
 ```
 
@@ -45,7 +60,7 @@ PAAD/
 
 검증한 환경은 R 4.5.3입니다. 분석에 필요한 package는 다음과 같습니다.
 
-- CRAN: `readxl`, `writexl`, `tidyverse`, `circlize`, `RColorBrewer`, `survival`
+- CRAN: `readxl`, `writexl`, `tidyverse`, `circlize`, `RColorBrewer`, `survival`, `cowplot`, `ragg`, `jsonlite`, `png`, `broom`
 - Bioconductor: `maftools`, `ComplexHeatmap`
 
 스크립트는 package를 자동 설치하거나 사용자의 global library를 변경하지 않습니다. 누락된 package가 있으면 실행을 중단하고 이름을 표시합니다. 새 환경에서는 R console에서 다음과 같이 준비할 수 있습니다.
@@ -53,7 +68,7 @@ PAAD/
 ```r
 install.packages(c(
   "readxl", "writexl", "tidyverse",
-  "circlize", "RColorBrewer", "survival"
+  "circlize", "RColorBrewer", "survival", "cowplot", "ragg", "jsonlite", "png", "broom"
 ))
 
 if (!requireNamespace("BiocManager", quietly = TRUE)) {
@@ -124,7 +139,7 @@ cp config/config.example.R config/local.R
 Rscript --vanilla run_all.R --config=config/local.R
 ```
 
-모든 결과는 기본적으로 `outputs/local_run/`에 새로 생성됩니다. 설정 검증은 `output_dir`이 이 저장소의 `outputs/` 또는 그 하위인지 확인하며, 원본 프로젝트나 임의의 외부 경로에는 결과를 쓰지 않습니다.
+논문용 분석 결과는 `output_dir/manuscript_subdir/`에 생성됩니다. 새 임상 설정 예시에서는 `outputs/updated_v3_run/manuscript/`입니다. 현재 로컬 설정의 재분석 결과는 `outputs/updated_v3_20260928/manuscript_extension_20261005_kras_maf/`에 있습니다. 설정 검증은 출력 위치가 이 저장소의 `outputs/` 또는 그 하위인지 확인합니다. `run_all.R`은 R 분석까지만 수행하며 Word·PowerPoint 생성은 아래 연결 문서의 별도 명령을 사용합니다.
 
 재분석 결과를 이전 실행과 명확히 구분하려면 `config/local.R`의 `output_dir`을 실행별 새 하위 폴더로 지정하십시오. 같은 폴더를 다시 사용하면 같은 이름의 파일은 갱신되지만, 입력 조건 부족으로 이번 실행에서 생략된 분석의 과거 파일은 자동 삭제하지 않습니다.
 
@@ -161,14 +176,17 @@ Rscript --vanilla scripts/clinical_summary.R --config=config/local.R
 | `clinical_file`, `target_patients_file`, `maf_file` | 세 입력 파일 |
 | `output_dir` | 반드시 저장소의 `outputs/` 하위 |
 | `target_encoding` | cohort TXT 인코딩; 현재 `CP949` |
+| `clinical_schema` | `legacy` 또는 `curated_v3`; 입력 값의 출처와 매핑 선택 |
+| `clinical_sheet` | 새 파일은 `Main`; `Data_dictionary`도 필수 |
+| `updated_cohort` | 새 입력 분석 대상: 기본 `all_unique` (M0+M1, 중복 ID 행 전체 제외). `localized_unique`는 별도 요청 시에만 쓰는 과거 M0 제한 설정 |
 | `sex_column_policy` | `legacy`, `target_patients`, `clinical_korean` 중 선택 |
 | `random_seed` | `NULL`이면 v19의 비결정적 simulated Fisher 동작 유지; 정수이면 재현 가능 |
 | `top_n` | 기본 상위 유전자 수 20; 낮은 값은 빠른 코드 검증용이며 기존 figure 제목·파일명은 유지 |
 | `plot_dpi` | production 기본값 1000; smoke test는 150 |
 
-기본 실제 데이터 설정은 `sex_column_policy="legacy"`입니다. 원본 clinical workbook에는 `Sex`가 아니라 `성별코드`, cohort TXT에는 `sex`가 있으므로 v19과 동일하게 성별 annotation을 자동 대체하지 않습니다. 어느 source와 coding을 사용할지 확인한 뒤에만 정책을 변경해야 합니다.
+기존 `legacy` 입력에서는 `sex_column_policy`로 성별의 출처를 선택합니다. `curated_v3`에서는 사전에 정의된 새 `Sex`의 F/M 값을 직접 사용하며 이 옵션은 적용하지 않습니다.
 
-## 검증 결과
+## 기존 v19 리팩터링 검증 기록
 
 - 기준 v19 스크립트 전체 1,279행의 입력·분석·출력을 조사했습니다.
 - 합성 입력으로 7개 분석 파일의 개별 실행과 `run_all.R` 전체 실행이 각각 완료되어 예상 산출물 42개를 확인했습니다.
@@ -181,11 +199,13 @@ Rscript --vanilla scripts/clinical_summary.R --config=config/local.R
 
 상세 변경과 한계는 [docs/refactoring_notes.md](docs/refactoring_notes.md)를 참조합니다.
 
+2026-09-28 업데이트에서는 새 schema 단위 검사와 기존 합성 회귀검사를 통과하고, top 20·1000 DPI 설정으로 실제 `run_all.R` 전체를 실행했습니다. 확장 그림은 파일 크기와 가독성을 위해 최대 400 DPI로 저장합니다. 구체적인 환자 수·비교 결과는 Git 제외 결과 폴더의 감사표에 저장합니다.
+
 ## 해석 시 주의사항
 
-- 기존 출력에서 `TMB`로 표시된 값은 panel 크기로 정규화한 mutations/Mb가 아니라 sample별 retained MAF row 수입니다. 이번 구조 정리에서는 계산과 기존 파일명을 임의로 바꾸지 않았습니다.
-- 변이빈도 및 driver 연관성 분석의 일부 Fisher test는 simulation을 사용하고 multiple-testing correction이 적용되지 않았습니다.
-- OS는 `survive`, RFS는 `Recur`를 event로 사용하며 `1=event`, `0=censored`로 해석합니다. 실제 임상 사전 확인이 필요합니다.
+- 기존 `TMB` 파일명은 유지하지만 축·제목은 Variant count로 표시합니다. 새 실제 TMB(mutations/Mb)는 별도로 분석합니다.
+- 일부 기존 omnibus Fisher p는 nominal 값입니다. 새 curated 분석에는 전 그룹 쌍별 검정과 Holm 보정을 추가했으며, 전체 연관성 표의 BH q와 구분합니다.
+- legacy 입력의 event 정의는 기존 사전을 확인해야 합니다. 새 입력에서는 y/n을 사망/재발 event 1/0으로 명시적으로 변환하며, 재발은 사망 포함 DFS/RFS와 구분합니다.
 - KRAS subtype의 좌표 fallback은 MAF의 genome build와 일치하는지 확인해야 합니다.
 - 환자와 검체 단위, 중복 barcode 대표행, staging edition과 biomarker 검출한계 처리에는 연구자 판단이 필요합니다.
 
@@ -203,3 +223,22 @@ git status --short
 ```
 
 실제 자료, 생성 결과 또는 개인 경로가 Git 변경 목록에 나타나지 않는지 확인한 뒤 사용자가 staging·commit·push 여부를 결정합니다.
+
+## 쌍별 비교와 원고용 보고서
+
+curated_v3 분석의 다군 비교는 전체 검정 외에 모든 쌍의 통계량·원 p·Holm p를 TSV로 저장합니다. KM에는 전체 log-rank p와 Holm p<0.05인 그룹 쌍을 표시합니다. Variant count는 유지된 MAF 행 수이며 임상 TMB(mutations/Mb)와 별개입니다.
+
+전체 R 분석이 성공한 뒤 원고 구성용 Word 보고서를 별도로 생성합니다.
+
+```sh
+python3 -m pip install python-docx pandas Pillow
+python3 scripts/build_results_report.py --results outputs/updated_v3_20260928
+```
+
+Figure 25개, 편집 가능한 Table 7개(일부 패널 분할), 분석·해석·주의사항, Supplementary table 파일명을 포함합니다. 결과 폴더에 DOCX와 Table1–7 TSV, 보조표 번호·그림 목록이 생성됩니다. 환자 단위 자료는 공개용 보조표에서 제외됩니다. 결과 폴더는 계속 Git 제외 대상입니다. [상세 방법](docs/updated_analysis.md)을 참고하십시오.
+
+## HRD 관련·MMR 유전자군 추가 분석
+
+`scripts/repair_gene_profiles.R`는 McIntyre 2020의 HRD 관련 18개 및 MMR 4개 유전자로 전체/변이 보유군 oncoplot, 임상 분포와 쌍별 통계표를 만듭니다. `run_all.R`의 마지막 단계이며 결과 접두사는 31–32입니다. 유전자 목록은 `R/repair_gene_sets.R`에서 확인할 수 있습니다.
+
+목록 내 변이는 기능적 HRD/dMMR 진단이 아닙니다. LOH, CNV, tumor purity, tumor cellularity는 분석·비교·그림 주석에서 제외하며 원본 값은 보존합니다. 보고서는 Pretendard 본문·표를 사용하며, 읽는 컴퓨터에도 해당 폰트를 설치하는 것이 좋습니다. 그림용 명칭은 `R/data.R`의 `figure_label()`에서 한 번에 확인할 수 있습니다.

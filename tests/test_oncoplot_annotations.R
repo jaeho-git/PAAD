@@ -1,0 +1,32 @@
+source("R/oncoplot_annotations.R")
+main <- c("Sex","Age_group","Differentiation","Neoadjuvant","T_stage","N_stage",
+  "LN_positive","M_stage","BMI","CA19_9","CEA","AJCC_stage","Stage_Group","Tumor_size")
+repair <- c("Age","Sex","Neoadjuvant","Preop_platinum_exposure","T_stage","N_stage",
+  "M_stage","Differentiation","R_status","KRAS_group","MSI")
+stopifnot(all(main %in% oncoplot_clinical_tracks("main")),all(repair %in% oncoplot_clinical_tracks("repair")))
+z <- as.data.frame(setNames(rep(list(c("A","B")), length(unique(c(main,repair)))),unique(c(main,repair))))
+z$Tumor_Sample_Barcode <- c("test1","test2"); z$KRAS_group <- c("G12D","G12V")
+z$Neoadjuvant <- c("y",NA); z$LN_positive <- c("1","0")
+z$T_stage <- c("1","2");z$N_stage <- c("0","1");z$M_stage <- c("0","1")
+for(nm in c("Age","BMI","CA19_9","CEA","Tumor_size","TMB"))z[[nm]] <- c(10,NA_real_)
+a <- oncoplot_clinical_data(z,c("test2","test1"),"main")
+stopifnot(ncol(a$data)==16,nrow(a$audit)==16,is.na(a$data$TMB[1]),a$data$TMB[2]==10,
+  is.na(a$data$Neoadjuvant[1]),a$data$Neoadjuvant[2]=="Yes",a$data$LN_positive[1]=="Negative")
+stopifnot(inherits(try(oncoplot_clinical_data(z[,setdiff(names(z),"BMI")],z$Tumor_Sample_Barcode,"main"),silent=TRUE),"try-error"))
+stopifnot(inherits(try(oncoplot_clinical_data(z,"unmatched","repair"),silent=TRUE),"try-error"))
+stopifnot(nrow(oncoplot_clinical_data(z,z$Tumor_Sample_Barcode,"repair")$audit)==12)
+first <- oncoplot_clinical_data(z,z$Tumor_Sample_Barcode,"repair")
+second <- oncoplot_clinical_data(z,rev(z$Tumor_Sample_Barcode),"repair")
+stopifnot(identical(first$colors$Preop_platinum_exposure,second$colors$Preop_platinum_exposure),
+  identical(first$colors$MSI,second$colors$MSI))
+cat("PASS: all previous clinical tracks retained; explicit new TMB; matched order; NA retained; missing columns fail.\n")
+palette <- annotation_categorical_palettes()
+all_colors <- unlist(palette,use.names=FALSE)
+stopifnot(!anyDuplicated(all_colors),!any(all_colors=="#BDBDBD"))
+continuous <- lapply(c("Age","BMI","CA19_9","CEA","Tumor_size","TMB"),annotation_continuous_palette)
+stopifnot(!anyDuplicated(vapply(continuous,paste,character(1),collapse=";")))
+source("R/plot_helpers.R")
+legacy <- make_custom_colors(z,c("Sex","Neoadjuvant","T_stage","N_stage","M_stage","TMB"))
+stopifnot(identical(unname(legacy$T_stage),unname(first$colors$T_stage)),
+  identical(unname(legacy$Neoadjuvant),unname(first$colors$Neoadjuvant)))
+cat("PASS: distinct fixed category colours, separate continuous palettes, stable shared legacy palettes.\n")

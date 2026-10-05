@@ -1,0 +1,7 @@
+NGS_report_id	Tumor_Sample_Barcode	patient_id	Age	Sex	BMI	Diabetes	Other_cancer	CA19_9	CEA	NGS_group	Neoadjuvant	Preop_platinum_exposure	Operation	ASA	Differentiation	Tumor_size	LVI	PNI	T_stage	N_stage	LN_positive	M_stage	AJCC_stage	R_status	HG_PanIN	IPMN_HGD	Adjuvant_treatment	Adjuvant_chemotherapy	Adjuvant_radiotherapy	KRAS_subtype	KRAS_subtype_MAF	TMB	MSI	Tumor_cellularity	Recurrence_event	Recurrence_pattern	Distant_pattern	DFS_months	Death_event	OS_months
+SYN-REPORT-1	SYN-V3-1	SYN-P1	45	F	21	n	n	20	1	upfront	n	No	PD	2	wd	1	y	n	1	0	0	0	IA	R0	No	No	y	y		G12D	G12D		Stable	20	n			8	n	18
+SYN-REPORT-2	SYN-V3-2	SYN-P1	48	M	21.5	y	n	NA	1.1	neo_op	y	Yes	DP	2	md	1.5	y	n	2	1	1	0	IIB	R1	No	No	y	y		G12D	G12D	4.2	Stable	25	y	Local only		9	y	20
+SYN-REPORT-3	SYN-V3-3	SYN-P3	51	F	22	n	n	42	1.2	metastatic	n	No	PD	2	pd	2	y	n	3	2	1	1	IV	R0	No	No	y	y		WT/Not detected	Not detected	5.2	Stable	30	NA				n	22
+SYN-REPORT-4	SYN-V3-4	SYN-P4	54	M	NA	y	n	53	1.3	neo_op	y	Yes	DP	2	NA	2.5	y	NA	1	0	0	0	IB	R1	No	No	y	y		G12V	G12V	6.2	Stable	35	y	Distant only	Liver only	11	y	24
+SYN-REPORT-5	SYN-V3-5	SYN-P5	57	F	23	n	n	64	1.4	upfront	n	No	PD	2	wd	3	y	n	2	1	1	0	IIB	R0	No	No	y	y		G12R	G12R	7.2	Stable	40	n			12	n	26
+SYN-REPORT-6	SYN-V3-6	SYN-P6	60	M	23.5	y	n	75	1.5	neo_op	y	Yes	DP	2	md	3.5	y	n	3	2	1	0	III	R1	No	No	y	y		Q61H	Other	8.2	Stable	45	y	Local only		13	y	28

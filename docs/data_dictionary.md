@@ -1,5 +1,7 @@
 # 입력자료 사전
 
+**새 `curated_v3` 임상자료:** 이 문서의 아래 내용은 기존 v19 입력의 정의입니다. 새 workbook의 `Data_dictionary` 기반 매핑과 생존 endpoint, 데이터 우선순위는 [updated_analysis.md](updated_analysis.md)를 우선합니다. 새 자료에서 대상 TXT는 감사 비교용이며 임상 값을 제공하지 않습니다.
+
 이 문서는 공개 가능한 입력 schema만 설명한다. 실제 환자·검체 값, 식별자, 날짜, 개인 경로는 포함하지 않는다. 실제 입력은 로컬의 `data/raw/`에 복제하여 사용하며 Git에서 제외한다. `data/example/`의 파일은 같은 형식을 설명하기 위해 처음부터 만든 합성 자료이며 Git에 포함할 수 있다.
 
 ## 파일 수준 정의
